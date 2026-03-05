@@ -4,6 +4,7 @@
  */
 
 import Database from "better-sqlite3";
+import fs from "fs";
 import path from "path";
 
 const DEFAULT_DB_PATH = path.join(process.cwd(), "taleshed.db");
@@ -13,8 +14,18 @@ export function getDbPath(): string {
 }
 
 export function initDatabase(dbPath?: string): Database.Database {
-  const target = dbPath ?? getDbPath();
-  const db = new Database(target);
+  const raw = dbPath ?? getDbPath();
+  const target = path.resolve(raw);
+  const dir = path.dirname(target);
+  if (dir !== ".") {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  try {
+    var db = new Database(target);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`TaleShed could not open database at ${target}: ${msg}`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS world_graph (
