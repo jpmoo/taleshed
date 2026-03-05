@@ -40,8 +40,10 @@ const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unk
   await transport.handleRequest(req, res, req.body);
 };
 // Streamable HTTP: GET (event stream) and POST (JSON-RPC); client may request /mcp or /mcp/sse
-app.get("/mcp*", handleMcp);
-app.post("/mcp*", handleMcp);
+app.get("/mcp", handleMcp);
+app.get("/mcp/sse", handleMcp);
+app.post("/mcp", handleMcp);
+app.post("/mcp/sse", handleMcp);
 
 const httpServer = app.listen(PORT, HOST, () => {
   const base = `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`;
