@@ -4,3 +4,6 @@
  */
 export { McpServer } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js";
 export { StdioServerTransport } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js";
+export { StreamableHTTPServerTransport } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/server/streamableHttp.js";
+export { SSEServerTransport } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/server/sse.js";
+export { createMcpExpressApp } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/server/express.js";

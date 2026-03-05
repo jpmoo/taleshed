@@ -23,28 +23,48 @@ npm run build
 npm run seed    # creates taleshed.db with starter vocabulary and sample world
 ```
 
-Optional: set `TALESHED_DB_PATH` to use a different database file. Set `OLLAMA_BASE` or `OLLAMA_MODEL` to change Ollama endpoint/model.
+Optional env: `TALESHED_DB_PATH`, `OLLAMA_BASE`, `OLLAMA_MODEL`.
 
 ## Run the MCP server
 
-**Stdio (for Claude Desktop or other MCP clients):**
+**HTTP (recommended for Claude / remote clients)** — connect via URL:
 
 ```bash
 npm start
+# or: npm run start:http
 ```
 
-Configure your MCP client to run this command (e.g. in Claude Desktop’s `claude_desktop_config.json`):
+Server listens on **http://localhost:3000** by default. The MCP endpoint is:
 
-```json
-{
-  "mcpServers": {
-    "taleshed": {
-      "command": "node",
-      "args": ["/path/to/taleshed/dist/index.js"]
-    }
-  }
-}
+- **URL:** `http://localhost:3000/mcp`
+
+Configure Claude (or any MCP client that supports Streamable HTTP) to use this URL as the server endpoint. No local path or command is required — the client reaches the server over HTTP.
+
+**SSE (legacy)** — if Streamable HTTP is flaky or your client only supports HTTP+SSE:
+
+```bash
+npm run start:sse
 ```
+
+- **GET** `http://localhost:3000/sse` — open the server→client event stream; the response includes an `endpoint` event with the POST URL (including `sessionId`).
+- **POST** `http://localhost:3000/messages?sessionId=<id>` — send JSON-RPC messages (use the `sessionId` from the GET response).
+
+SSE is simpler in some environments (proxies, older clients) but is deprecated in the MCP spec in favor of Streamable HTTP.
+
+**Environment:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TALESHED_PORT` or `PORT` | `3000` | HTTP server port. |
+| `TALESHED_HOST` | `0.0.0.0` | Bind address (`0.0.0.0` = all interfaces; use `127.0.0.1` for local only). |
+
+**Stdio (local process)** — for clients that spawn the server as a subprocess:
+
+```bash
+npm run start:stdio
+```
+
+Configure the client with the command to run, e.g. `node /path/to/taleshed/dist/index.js`.
 
 ## Tools
 
@@ -60,6 +80,17 @@ Configure your MCP client to run this command (e.g. in Claude Desktop’s `claud
 2. Populate `vocabulary` with starter adjectives (see spec Appendix A).
 3. Populate `world_graph` with locations, NPCs, objects, and the `player` row (see spec Appendix B).
 4. Start the MCP server and confirm Ollama is reachable (`GET http://localhost:11434/api/tags`).
+
+## Streamable HTTP vs SSE
+
+| | Streamable HTTP | SSE (legacy) |
+|---|-----------------|--------------|
+| **Endpoint** | Single URL: `POST /mcp` (and optional GET for streaming). | Two: `GET /sse` to open stream, then `POST /messages?sessionId=...` for each request. |
+| **State** | Can be stateless (no session). | Stateful: server keeps one SSE connection and session per client. |
+| **Spec status** | Current, recommended. | Deprecated (replaced by Streamable HTTP in 2025-03-26). |
+| **Easier when** | Your client supports it; one URL, no session bookkeeping. | Proxies or clients that only speak HTTP+SSE; sometimes more reliable in constrained setups. |
+
+If Streamable HTTP gives you trouble (e.g. connection or proxy issues), run with **SSE** instead: `npm run start:sse` and point the client at `http://localhost:3000/sse`; the client must then POST to `/messages?sessionId=...` using the session ID from the SSE `endpoint` event.
 
 ## Spec reference
 
