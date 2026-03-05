@@ -24,9 +24,24 @@ const app = createMcpExpressApp({
   ...(HOST === "0.0.0.0" && { allowedHosts: ["localhost", "127.0.0.1"] }),
 });
 
-app.post("/mcp", async (req: import("node:http").IncomingMessage & { body?: unknown }, res: import("node:http").ServerResponse) => {
-  await transport.handleRequest(req, res, req.body);
+// CORS so browser-based MCP clients (e.g. Claude in browser) can connect
+app.use((req: import("node:http").IncomingMessage & { method?: string }, res: import("node:http").ServerResponse, next: () => void) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204).end();
+    return;
+  }
+  next();
 });
+
+const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown }, res: import("node:http").ServerResponse) => {
+  await transport.handleRequest(req, res, req.body);
+};
+// Streamable HTTP: GET (event stream) and POST (JSON-RPC); client may request /mcp or /mcp/sse
+app.get("/mcp*", handleMcp);
+app.post("/mcp*", handleMcp);
 
 const httpServer = app.listen(PORT, HOST, () => {
   const base = `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`;
