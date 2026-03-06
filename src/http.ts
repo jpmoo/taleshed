@@ -25,7 +25,7 @@ const app = createMcpExpressApp({
 });
 
 // CORS so browser-based MCP clients (e.g. Claude in browser) can connect
-app.use((req: import("node:http").IncomingMessage & { method?: string }, res: import("node:http").ServerResponse, next: () => void) => {
+app.use((req: import("node:http").IncomingMessage & { method?: string; headers?: Record<string, string | string[] | undefined> }, res: import("node:http").ServerResponse, next: () => void) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id");
@@ -33,11 +33,24 @@ app.use((req: import("node:http").IncomingMessage & { method?: string }, res: im
     res.writeHead(204).end();
     return;
   }
+  // MCP transport returns 406 unless Accept includes text/event-stream; some clients send */* first
+  const accept = req.headers?.accept;
+  if (accept === "*/*" && req.headers) {
+    req.headers.accept = "application/json, text/event-stream";
+  }
   next();
 });
 
 const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown }, res: import("node:http").ServerResponse) => {
-  await transport.handleRequest(req, res, req.body);
+  try {
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error("[TaleShed] MCP request error:", err);
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Internal server error", message: err instanceof Error ? err.message : String(err) }));
+    }
+  }
 };
 // Streamable HTTP: GET (event stream) and POST (JSON-RPC)
 // Also handle "/" so when a reverse proxy strips a prefix (e.g. /taleshed -> /), requests still work

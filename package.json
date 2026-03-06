@@ -6,9 +6,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/http.js",
-    "start:http": "node dist/http.js",
-    "start:sse": "node dist/sse.js",
+    "start": "node -r dotenv/config dist/http.js",
+    "start:http": "node -r dotenv/config dist/http.js",
+    "start:sse": "node -r dotenv/config dist/sse.js",
     "start:stdio": "node dist/index.js",
     "dev": "tsc && node dist/http.js",
     "seed": "node dist/seed.js",
@@ -20,6 +20,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
     "better-sqlite3": "^11.6.0",
+    "dotenv": "^16.4.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {
