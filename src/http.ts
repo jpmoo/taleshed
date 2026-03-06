@@ -39,9 +39,12 @@ app.use((req: import("node:http").IncomingMessage & { method?: string }, res: im
 const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown }, res: import("node:http").ServerResponse) => {
   await transport.handleRequest(req, res, req.body);
 };
-// Streamable HTTP: GET (event stream) and POST (JSON-RPC); client may request /mcp or /mcp/sse
+// Streamable HTTP: GET (event stream) and POST (JSON-RPC)
+// Also handle "/" so when a reverse proxy strips a prefix (e.g. /taleshed -> /), requests still work
+app.get("/", handleMcp);
 app.get("/mcp", handleMcp);
 app.get("/mcp/sse", handleMcp);
+app.post("/", handleMcp);
 app.post("/mcp", handleMcp);
 app.post("/mcp/sse", handleMcp);
 
