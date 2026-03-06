@@ -31,8 +31,21 @@ const OLLAMA_UNREACHABLE_PROSE =
 const MALFORMED_RESPONSE_PROSE =
   "The world flickers uncertainly. (Engine: The story engine could not interpret the outcome. Please try again.)";
 
+/** Parse adjectives from DB (may be invalid/corrupt); always returns a string[]. */
+function safeParseAdjectives(val: string | unknown): string[] {
+  try {
+    if (typeof val === "string") {
+      const parsed = JSON.parse(val || "[]");
+      return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+    }
+    return Array.isArray(val) ? val.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 function toSceneEntity(node: WorldNode, recentHistory: string[]): SceneEntity {
-  const adjectives = typeof node.adjectives === "string" ? JSON.parse(node.adjectives || "[]") : node.adjectives;
+  const adjectives = safeParseAdjectives(node.adjectives);
   return {
     node_id: node.node_id,
     node_type: node.node_type,
@@ -142,9 +155,9 @@ export async function takeTurn(
     mistralResponse.node_impacts.map((i) => [
       i.node_id,
       {
-        prose_impact: i.prose_impact,
-        adjectives_old: i.adjectives_old,
-        adjectives_new: i.adjectives_new,
+        prose_impact: i.prose_impact ?? "No change.",
+        adjectives_old: safeParseAdjectives(i.adjectives_old),
+        adjectives_new: safeParseAdjectives(i.adjectives_new),
       },
     ])
   );
@@ -153,11 +166,11 @@ export async function takeTurn(
     let entry = impactByNode.get(nodeId);
     if (!entry) {
       const node = getNode(db, nodeId);
-      const currentAdj = node ? (typeof node.adjectives === "string" ? node.adjectives : JSON.stringify(node.adjectives)) : "[]";
+      const adj = node ? safeParseAdjectives(node.adjectives) : [];
       entry = {
         prose_impact: "No change.",
-        adjectives_old: JSON.parse(currentAdj),
-        adjectives_new: JSON.parse(currentAdj),
+        adjectives_old: adj,
+        adjectives_new: adj,
       };
     }
     impactByNode.set(nodeId, entry);

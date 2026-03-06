@@ -86,7 +86,7 @@ If no existing term fits, invent a new adjective and include it in new_adjective
 
 function buildSectionC(ctx: SceneContext): string {
   const loc = ctx.location;
-  const adj = JSON.parse(loc.adjectives as unknown as string) as string[];
+  const adj = Array.isArray(loc.adjectives) ? loc.adjectives : [];
   let out = `CURRENT SCENE:
 Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
@@ -95,14 +95,12 @@ Location adjectives: ${JSON.stringify(adj)}
 ENTITIES PRESENT:
 `;
   for (const e of ctx.entities) {
-    const adjList = Array.isArray(e.adjectives) ? e.adjectives : JSON.parse((e.adjectives as string) || "[]");
+    const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
     out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}\n`;
     out += `  Recent history: ${e.recent_history.join(" ")}\n`;
   }
   out += `\nPLAYER:\n`;
-  const playerAdj = Array.isArray(ctx.player.adjectives)
-    ? ctx.player.adjectives
-    : JSON.parse((ctx.player.adjectives as string) || "[]");
+  const playerAdj = Array.isArray(ctx.player.adjectives) ? ctx.player.adjectives : [];
   out += `- node_id: player | location: ${(ctx.player as { location_id?: string }).location_id ?? "?"} | adjectives: ${JSON.stringify(playerAdj)}\n`;
   out += `  Inventory: ${JSON.stringify(ctx.inventoryNodeIds)}\n`;
   out += `  Recent history: ${ctx.player.recent_history.join(" ")}\n`;
@@ -225,6 +223,9 @@ function extractJsonString(raw: string): string {
 
 function parseJsonResponse(responseText: string): MistralResponse {
   const jsonStr = extractJsonString(responseText);
+  if (!jsonStr.trimStart().startsWith("{")) {
+    throw new Error("No JSON object in response");
+  }
   const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
   for (const key of REQUIRED_JSON_FIELDS) {
     if (!(key in parsed)) throw new Error(`Missing required field: ${key}`);
