@@ -8,7 +8,6 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { randomUUID } from "node:crypto";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
@@ -67,13 +66,7 @@ const HOST = process.env["TALESHED_HOST"] ?? "0.0.0.0";
 const dbPath = getDbPath();
 const db = initDatabase(dbPath);
 
-const server = createTaleshedServer(db);
-// Stateful mode required: one transport handles many requests; stateless would require a new transport per request.
-const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
-transport.onerror = (err) => {
-  logError("transport.onerror:", err);
-};
-await server.connect(transport);
+// Stateless: new server + transport per request so reconnect always gets a fresh initialize (no "Server already initialized").
 
 // Host header validation: when behind a proxy (e.g. Tailscale/Caddy), Host is the public hostname.
 // Set TALESHED_ALLOWED_HOSTS=localhost,127.0.0.1,your-public-hostname (comma-separated).
@@ -129,7 +122,11 @@ const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unk
       }
     });
   }
+  const server = createTaleshedServer(db);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  transport.onerror = (err) => logError("transport.onerror:", err);
   try {
+    await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
     logError("MCP request error:", err);
@@ -137,6 +134,13 @@ const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unk
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error", message: err instanceof Error ? err.message : String(err) }));
     }
+  } finally {
+    const cleanup = () => {
+      transport.close();
+      server.close();
+    };
+    res.once("finish", cleanup);
+    res.once("close", cleanup);
   }
 };
 
