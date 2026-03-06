@@ -31,8 +31,14 @@ function logError(label: string, err: unknown) {
   }
   console.error("[TaleShed]", label, err);
 }
-function logRequest(method: string, url: string) {
-  const line = `[${new Date().toISOString()}] ${method} ${url}\n`;
+const DEBUG = process.env["TALESHED_DEBUG"] === "1" || process.env["TALESHED_DEBUG"] === "true";
+function logRequest(method: string, url: string, req?: import("node:http").IncomingMessage & { headers?: Record<string, string | string[] | undefined> }) {
+  let line = `[${new Date().toISOString()}] ${method} ${url}\n`;
+  if (DEBUG && req?.headers) {
+    const host = req.headers.host ?? "(none)";
+    const auth = req.headers.authorization ? "present" : "(none)";
+    line += `  Host: ${host}  Authorization: ${auth}\n`;
+  }
   try {
     appendLog(ERROR_LOG, line);
   } catch {
@@ -64,9 +70,19 @@ const server = createTaleshedServer(db);
 const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 await server.connect(transport);
 
+// Host header validation: when behind a proxy (e.g. Tailscale/Caddy), Host is the public hostname.
+// Set TALESHED_ALLOWED_HOSTS=localhost,127.0.0.1,your-public-hostname (comma-separated).
+// If unset and binding 0.0.0.0, we don't restrict Host so the public URL works.
+const allowedHostsEnv = process.env["TALESHED_ALLOWED_HOSTS"];
+const allowedHosts = allowedHostsEnv
+  ? allowedHostsEnv.split(",").map((s) => s.trim()).filter(Boolean)
+  : HOST === "0.0.0.0"
+    ? undefined
+    : ["localhost", "127.0.0.1"];
+
 const app = createMcpExpressApp({
   host: HOST,
-  ...(HOST === "0.0.0.0" && { allowedHosts: ["localhost", "127.0.0.1"] }),
+  ...(allowedHosts && allowedHosts.length > 0 && { allowedHosts }),
 });
 
 // CORS so browser-based MCP clients (e.g. Claude in browser) can connect
@@ -86,8 +102,19 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
   next();
 });
 
-const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown; method?: string; url?: string }, res: import("node:http").ServerResponse) => {
-  logRequest(req.method ?? "?", req.url ?? "/");
+const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown; method?: string; url?: string; headers?: Record<string, string | string[] | undefined> }, res: import("node:http").ServerResponse) => {
+  logRequest(req.method ?? "?", req.url ?? "/", req);
+  if (DEBUG) {
+    res.on("finish", () => {
+      try {
+        appendLog(ERROR_LOG, `  -> ${res.statusCode}\n`);
+      } catch {
+        try {
+          appendLog("/tmp/taleshed-errors.log", `  -> ${res.statusCode}\n`);
+        } catch (_) {}
+      }
+    });
+  }
   try {
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
@@ -120,6 +147,11 @@ const httpServer = app.listen(PORT, HOST, () => {
   process.stderr.write(`  MCP endpoint: ${base}/mcp\n`);
   process.stderr.write(`  Database: ${dbPath}\n`);
   process.stderr.write(`  Request/error log: ${ERROR_LOG}\n`);
+  if (allowedHosts?.length) {
+    process.stderr.write(`  Allowed Host headers: ${allowedHosts.join(", ")}\n`);
+  } else {
+    process.stderr.write(`  Allowed Host headers: any (no validation)\n`);
+  }
 });
 
 process.on("SIGINT", () => {
