@@ -1,0 +1,18 @@
+[Unit]
+Description=TaleShed MCP Server (HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=jpmoo
+Group=jpmoo
+WorkingDirectory=/home/jpmoo/taleshed
+EnvironmentFile=-/home/jpmoo/taleshed/.env
+ExecStart=/usr/bin/node -r dotenv/config dist/http.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -47,6 +47,24 @@ function safeParseExits(val: string | undefined | null): { label: string; target
   }
 }
 
+/** Prose that looks like JSON or is too long must not be written to the ledger (would pollute future prompts). */
+const MAX_PROSE_LEDGER = 500;
+function sanitizeProseForLedger(s: string): string {
+  if (typeof s !== "string") return "No change.";
+  const t = s.trim();
+  if (t.includes("{") || t.length > MAX_PROSE_LEDGER) return "No change.";
+  return t || "No change.";
+}
+
+/** Prose used in the prompt (recent history); omit JSON or huge blobs so the model isn't confused. */
+const MAX_PROSE_PROMPT = 280;
+function sanitizeProseForPrompt(s: string | null | undefined): string {
+  if (s == null) return "";
+  const t = String(s).trim();
+  if (t.includes("{") || t.length > MAX_PROSE_PROMPT) return "";
+  return t;
+}
+
 /** Parse adjectives from DB (may be invalid/corrupt); always returns a string[]. */
 function safeParseAdjectives(val: string | unknown): string[] {
   try {
@@ -89,7 +107,9 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const rawEntities: SceneEntity[] = [];
   for (const node of allEntities) {
     if (node.node_id === "player") continue;
-    const recent = getRecentHistoryForNode(db, node.node_id, 3).map((h) => h.prose_impact ?? "").filter(Boolean);
+    const recent = getRecentHistoryForNode(db, node.node_id, 3)
+      .map((h) => sanitizeProseForPrompt(h.prose_impact))
+      .filter(Boolean);
     rawEntities.push(toSceneEntity(node, recent));
   }
   const entities = rawEntities.sort(
@@ -98,7 +118,9 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
       a.node_id.localeCompare(b.node_id)
   );
 
-  const playerRecent = getRecentHistoryForNode(db, "player", 3).map((h) => h.prose_impact ?? "").filter(Boolean);
+  const playerRecent = getRecentHistoryForNode(db, "player", 3)
+    .map((h) => sanitizeProseForPrompt(h.prose_impact))
+    .filter(Boolean);
   const playerEntity = toSceneEntity(player, playerRecent);
   (playerEntity as SceneEntity & { location_id: string }).location_id = locationId;
 
@@ -110,7 +132,10 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const locationExits = safeParseExits((location as WorldNode & { exits?: string }).exits);
 
   return {
-    location: toSceneEntity(location, getRecentHistoryForNode(db, location.node_id, 3).map((h) => h.prose_impact ?? "")),
+    location: toSceneEntity(
+      location,
+      getRecentHistoryForNode(db, location.node_id, 3).map((h) => sanitizeProseForPrompt(h.prose_impact)).filter(Boolean)
+    ),
     entities,
     player: playerEntity,
     inventoryNodeIds,
@@ -210,7 +235,7 @@ export async function takeTurn(
     timestamp: now,
     action_description: actionDescription,
     node_id,
-    prose_impact: entry.prose_impact,
+    prose_impact: sanitizeProseForLedger(entry.prose_impact),
     adjectives_old: JSON.stringify(entry.adjectives_old),
     adjectives_new: JSON.stringify(entry.adjectives_new),
     system_event: null as string | null,

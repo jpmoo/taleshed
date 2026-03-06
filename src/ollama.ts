@@ -82,7 +82,9 @@ You must return exactly the fields described below and nothing else.
 
 CRITICAL: Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist. If the scene lists no exits, this location has no exits — say so if the player asks. Never describe or imply a door, corridor, or other room that is not in the entity list.
 
-When writing narrative_prose: Describe the location/room first, then who is here (every NPC in ENTITIES PRESENT must be mentioned — do not leave out characters). Then describe notable objects. Do not lead with a single object and omit NPCs.`;
+When writing narrative_prose:
+- Describe the location/room first, then who is here, then notable objects. Every NPC listed in ENTITIES PRESENT must be mentioned by name in the narrative. If an NPC is present, the scene is not "alone" — do not say the player is alone when an NPC is listed above.
+- Only describe outcomes that follow from the player's actual action. Do not have objects change state (e.g. unlit→lit, closed→open) unless the player's command explicitly does something to cause it. If the player only "takes" or "picks up" an object, describe only the take — do not add lighting, igniting, or other effects.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -109,13 +111,13 @@ ENTITIES PRESENT:
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
     out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}\n`;
-    out += `  Recent history: ${e.recent_history.join(" ")}\n`;
+    out += `  Recent history: ${e.recent_history.join(" ") || "(none)"}\n`;
   }
   out += `\nPLAYER:\n`;
   const playerAdj = Array.isArray(ctx.player.adjectives) ? ctx.player.adjectives : [];
   out += `- node_id: player | location: ${(ctx.player as { location_id?: string }).location_id ?? "?"} | adjectives: ${JSON.stringify(playerAdj)}\n`;
   out += `  Inventory: ${JSON.stringify(ctx.inventoryNodeIds)}\n`;
-  out += `  Recent history: ${ctx.player.recent_history.join(" ")}\n`;
+  out += `  Recent history: ${ctx.player.recent_history.join(" ") || "(none)"}\n`;
   const exits = ctx.locationExits ?? [];
   if (exits.length === 0) {
     out += `\nEXITS FROM THIS LOCATION: (none)\n`;
@@ -129,7 +131,7 @@ ENTITIES PRESENT:
 }
 
 function buildSectionD(recentHistory: string): string {
-  return `RECENT NARRATION (last 2-4 exchanges as provided by Claude):
+  return `RECENT NARRATION (last several exchanges as provided by Claude — use this to keep tone and facts consistent):
 ${recentHistory || "(none)"}
 
 Check: does the recent narration describe anything inconsistent with the current world state above? If so, note corrections in your response.`;

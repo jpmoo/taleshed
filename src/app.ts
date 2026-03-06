@@ -8,9 +8,30 @@ import type Database from "better-sqlite3";
 import { z } from "zod";
 import { handleTakeTurn, handleBookmark, handleRestoreToBookmark } from "./tools.js";
 
+const MAX_SUGGESTED_HISTORY_CHARS = 2800;
+
+/** Build a history string for Claude to pass back on the next take_turn call. */
+function buildSuggestedRecentHistory(
+  recentHistory: string | undefined,
+  playerCommand: string,
+  prose: string
+): string | null {
+  const prev = (recentHistory ?? "").trim();
+  const exchange = `Player: ${playerCommand.trim()}\n\n${(prose ?? "").trim()}`.trim();
+  if (!exchange) return null;
+  const combined = prev ? `${prev}\n\n---\n\n${exchange}` : exchange;
+  if (combined.length <= MAX_SUGGESTED_HISTORY_CHARS) return combined;
+  return "…\n\n" + combined.slice(-(MAX_SUGGESTED_HISTORY_CHARS - 2));
+}
+
 const TakeTurnSchema = z.object({
   player_command: z.string().describe("The raw text input from the player, e.g. 'ask Ciarán about the manuscript' or 'pick up the torch'"),
-  recent_history: z.string().optional().describe("Optional. A short prose summary or transcript of the last 2–4 exchanges, for reconciliation context."),
+  recent_history: z
+    .string()
+    .optional()
+    .describe(
+      "Recommended. Prose summary or transcript of the last 4–8 exchanges (or more). Include what the player did and what was narrated. Up to ~2000 characters helps the engine keep narration consistent. Pass the suggested_recent_history from the previous take_turn result when available."
+    ),
 });
 
 export function createTaleshedServer(db: Database.Database): McpServer {
@@ -23,7 +44,8 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     "take_turn",
     {
       title: "Take Turn",
-      description: "The core game loop. Pass the player's command and optional recent prose history. Returns result (success/failure/partial), prose for narration, and optional error if the tool failed.",
+      description:
+        "The core game loop. Pass the player's command and, when available, recent_history (or suggested_recent_history from the previous response) so the engine can keep narration consistent. Returns result, prose for narration, and suggested_recent_history to pass back on the next call. Optional error if the tool failed.",
       inputSchema: TakeTurnSchema,
     },
     async (args: unknown) => {
@@ -34,7 +56,21 @@ export function createTaleshedServer(db: Database.Database): McpServer {
         };
       }
       const out = await handleTakeTurn(db, parsed.data);
-      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+      const suggested = buildSuggestedRecentHistory(
+        parsed.data.recent_history,
+        parsed.data.player_command,
+        out.prose
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              suggested != null ? { ...out, suggested_recent_history: suggested } : out
+            ),
+          },
+        ],
+      };
     }
   );
 
