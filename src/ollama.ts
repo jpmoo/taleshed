@@ -80,11 +80,15 @@ Your job is to determine what happens in the world when the player takes an acti
 You must return ONLY valid JSON. No prose outside the JSON structure.
 You must return exactly the fields described below and nothing else.
 
-CRITICAL: Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist. If the scene lists no exits, this location has no exits — say so if the player asks. Never describe or imply a door, corridor, or other room that is not in the entity list.
+CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
+- Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist.
+- Do not invent any person not in ENTITIES PRESENT. No "two monks", "a figure", "someone at the table", "a cook", or other characters. If only one NPC is listed, there is exactly one NPC. If no NPCs are listed for a location, the room has no other people.
+- Do not invent any object not in ENTITIES PRESENT. No poker, trapdoor, seam in the floor, or other props unless they appear in the list. If the kitchen (or any location) has no object entities listed, there are no takeable or notable objects there beyond what the location description states.
+- If the scene lists no exits, this location has no exits. Never describe or imply a door, corridor, or room that is not in the entity list.
 
 When writing narrative_prose:
-- Describe the location/room first, then who is here, then notable objects. Every NPC listed in ENTITIES PRESENT must be mentioned by name in the narrative. If an NPC is present, the scene is not "alone" — do not say the player is alone when an NPC is listed above.
-- Only describe outcomes that follow from the player's actual action. Do not have objects change state (e.g. unlit→lit, closed→open) unless the player's command explicitly does something to cause it. If the player only "takes" or "picks up" an object, describe only the take — do not add lighting, igniting, or other effects.`;
+- Describe the location/room first, then who is here (only NPCs from the list, by name), then notable objects (only objects from the list). Every NPC in ENTITIES PRESENT must be mentioned; never add extra people.
+- Only describe outcomes that follow from the player's actual action. Do not have objects change state (e.g. unlit→lit) unless the player's command explicitly causes it. If the player "takes" something that is not in ENTITIES PRESENT, the action fails (you cannot take what isn't there).`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -106,7 +110,7 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT:
+ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here):
 `;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
