@@ -80,7 +80,9 @@ Your job is to determine what happens in the world when the player takes an acti
 You must return ONLY valid JSON. No prose outside the JSON structure.
 You must return exactly the fields described below and nothing else.
 
-CRITICAL: Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist. If the scene lists no exits, this location has no exits — say so if the player asks. Never describe or imply a door, corridor, or other room that is not in the entity list.`;
+CRITICAL: Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist. If the scene lists no exits, this location has no exits — say so if the player asks. Never describe or imply a door, corridor, or other room that is not in the entity list.
+
+When writing narrative_prose: Describe the location/room first, then who is here (every NPC in ENTITIES PRESENT must be mentioned — do not leave out characters). Then describe notable objects. Do not lead with a single object and omit NPCs.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {

@@ -85,12 +85,18 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const inventoryNodeIds = inventory.map((n) => n.node_id);
 
   const allEntities = [location, ...inLocation, player];
-  const entities: SceneEntity[] = [];
+  const entityOrder: Record<string, number> = { location: 0, npc: 1, object: 2, player: 3 };
+  const rawEntities: SceneEntity[] = [];
   for (const node of allEntities) {
     if (node.node_id === "player") continue;
     const recent = getRecentHistoryForNode(db, node.node_id, 3).map((h) => h.prose_impact ?? "").filter(Boolean);
-    entities.push(toSceneEntity(node, recent));
+    rawEntities.push(toSceneEntity(node, recent));
   }
+  const entities = rawEntities.sort(
+    (a, b) =>
+      (entityOrder[a.node_type] ?? 2) - (entityOrder[b.node_type] ?? 2) ||
+      a.node_id.localeCompare(b.node_id)
+  );
 
   const playerRecent = getRecentHistoryForNode(db, "player", 3).map((h) => h.prose_impact ?? "").filter(Boolean);
   const playerEntity = toSceneEntity(player, playerRecent);
