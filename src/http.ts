@@ -5,9 +5,18 @@
  * Claude and other remote clients connect via URL, e.g. http://localhost:3000/mcp
  */
 
+import fs from "fs";
+import path from "path";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
+
+const ERROR_LOG = path.join(process.cwd(), "taleshed-errors.log");
+function logError(label: string, err: unknown) {
+  const line = `[${new Date().toISOString()}] ${label} ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`;
+  fs.appendFileSync(ERROR_LOG, line);
+  console.error("[TaleShed]", label, err);
+}
 
 const PORT = Number(process.env["TALESHED_PORT"] ?? process.env["PORT"] ?? 3000);
 const HOST = process.env["TALESHED_HOST"] ?? "0.0.0.0";
@@ -41,17 +50,27 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
   next();
 });
 
-const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown }, res: import("node:http").ServerResponse) => {
+const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown; method?: string; url?: string }, res: import("node:http").ServerResponse) => {
+  if (req.method === "POST") {
+    fs.appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] received ${req.method} ${req.url ?? "/"}\n`);
+  }
   try {
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
-    console.error("[TaleShed] MCP request error:", err);
+    logError("MCP request error:", err);
     if (!res.headersSent) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error", message: err instanceof Error ? err.message : String(err) }));
     }
   }
 };
+
+process.on("uncaughtException", (err) => {
+  logError("uncaughtException:", err);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  logError("unhandledRejection:", reason ?? promise);
+});
 // Streamable HTTP: GET (event stream) and POST (JSON-RPC)
 // Also handle "/" so when a reverse proxy strips a prefix (e.g. /taleshed -> /), requests still work
 app.get("/", handleMcp);
