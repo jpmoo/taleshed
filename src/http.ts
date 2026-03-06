@@ -8,6 +8,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { randomUUID } from "node:crypto";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
@@ -67,7 +68,11 @@ const dbPath = getDbPath();
 const db = initDatabase(dbPath);
 
 const server = createTaleshedServer(db);
-const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+// Stateful mode required: one transport handles many requests; stateless would require a new transport per request.
+const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+transport.onerror = (err) => {
+  logError("transport.onerror:", err);
+};
 await server.connect(transport);
 
 // Host header validation: when behind a proxy (e.g. Tailscale/Caddy), Host is the public hostname.
@@ -94,9 +99,9 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
     res.writeHead(204).end();
     return;
   }
-  // MCP transport returns 406 unless Accept includes text/event-stream; some clients send */* first
+  // MCP transport requires Accept to include both application/json and text/event-stream
   const accept = req.headers?.accept;
-  if (accept === "*/*" && req.headers) {
+  if (req.headers && (!accept?.includes("application/json") || !accept?.includes("text/event-stream"))) {
     req.headers.accept = "application/json, text/event-stream";
   }
   next();
