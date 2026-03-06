@@ -99,10 +99,19 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
     res.writeHead(204).end();
     return;
   }
-  // MCP transport requires Accept to include both application/json and text/event-stream
+  // MCP transport requires Accept to include both application/json and text/event-stream.
+  // The SDK's adapter reads from rawHeaders (not req.headers), so we must patch rawHeaders.
   const accept = req.headers?.accept;
-  if (req.headers && (!accept?.includes("application/json") || !accept?.includes("text/event-stream"))) {
-    req.headers.accept = "application/json, text/event-stream";
+  const needBoth = !accept?.includes("application/json") || !accept?.includes("text/event-stream");
+  if (needBoth) {
+    const want = "application/json, text/event-stream";
+    if (req.headers) req.headers.accept = want;
+    const raw = (req as import("node:http").IncomingMessage & { rawHeaders?: string[] }).rawHeaders;
+    if (raw && Array.isArray(raw)) {
+      const i = raw.findIndex((h) => h.toLowerCase() === "accept");
+      if (i >= 0 && i + 1 < raw.length) raw[i + 1] = want;
+      else raw.push("Accept", want);
+    }
   }
   next();
 });
