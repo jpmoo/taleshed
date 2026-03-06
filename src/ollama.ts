@@ -86,9 +86,12 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - Do not invent any object not in ENTITIES PRESENT. No poker, trapdoor, seam in the floor, or other props unless they appear in the list. If the kitchen (or any location) has no object entities listed, there are no takeable or notable objects there beyond what the location description states.
 - If the scene lists no exits, this location has no exits. Never describe or imply a door, corridor, or room that is not in the entity list.
 
+PLAYER INVENTORY IS EXHAUSTIVE: The player has only the items listed in Inventory. Do not have them produce, pull from a belt, or use flint and steel, keys, or any tool not in that list. If Inventory is [], the player has nothing.
+
 When writing narrative_prose:
 - Describe the location/room first, then who is here (only NPCs from the list, by name), then notable objects (only objects from the list). Every NPC in ENTITIES PRESENT must be mentioned; never add extra people.
-- Only describe outcomes that follow from the player's actual action. Do not have objects change state (e.g. unlit→lit) unless the player's command explicitly causes it. If the player "takes" something that is not in ENTITIES PRESENT, the action fails (you cannot take what isn't there).`;
+- "Take" or "pick up" means only that: the object is now in the player's possession. Do NOT also light, ignite, or use the object. If the player says only "take the torch", the torch ends up in hand but still unlit. Do not describe lighting it unless the player explicitly says they light it (and has a means in Inventory).
+- Only describe outcomes that follow from the player's actual action. Do not have objects change state (unlit→lit, etc.) unless the player's command explicitly causes it and they have the means. If the player "takes" something not in ENTITIES PRESENT, the action fails.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
