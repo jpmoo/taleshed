@@ -41,9 +41,9 @@ function seedWorld(): void {
   db.exec(`
     INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits)
     VALUES
-      ('scriptorium', 'location', 'The Scriptorium', 'A dim scriptorium. Parchment and ink line the desks. A single torch bracket hangs on the wall. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}'),
+      ('scriptorium', 'location', 'The Scriptorium', 'A dim scriptorium. Parchment and ink line the desks. A torch bracket on the wall. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}'),
       ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A fire burns in the hearth, casting flickering light.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}'),
-      ('torch_01', 'object', 'The Torch', 'An unlit torch in a wall bracket. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]'),
+      ('torch_01', 'object', 'The Torch', 'An unlit torch in the wall bracket. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]'),
       ('ciaran', 'npc', 'Brother Ciarán', 'A monk at a desk, copying a manuscript.', '["guarded"]', 'scriptorium', 1, NULL, '[]'),
       ('player', 'player', 'Player', 'You.', '[]', 'scriptorium', 1, NULL, '[]');
   `);
