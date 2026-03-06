@@ -11,12 +11,19 @@ import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.j
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
 
-const ERROR_LOG = path.join(process.cwd(), "taleshed-errors.log");
+const CWD = process.cwd();
+const ERROR_LOG = path.join(CWD, "taleshed-errors.log");
 function logError(label: string, err: unknown) {
   const line = `[${new Date().toISOString()}] ${label} ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`;
   fs.appendFileSync(ERROR_LOG, line);
   console.error("[TaleShed]", label, err);
 }
+function logRequest(method: string, url: string) {
+  const line = `[${new Date().toISOString()}] ${method} ${url}\n`;
+  fs.appendFileSync(ERROR_LOG, line);
+}
+// Create log file at startup so it exists and we know where we're logging
+fs.appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] TaleShed started (cwd=${CWD}, log=${ERROR_LOG})\n`);
 
 const PORT = Number(process.env["TALESHED_PORT"] ?? process.env["PORT"] ?? 3000);
 const HOST = process.env["TALESHED_HOST"] ?? "0.0.0.0";
@@ -51,9 +58,7 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
 });
 
 const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown; method?: string; url?: string }, res: import("node:http").ServerResponse) => {
-  if (req.method === "POST") {
-    fs.appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] received ${req.method} ${req.url ?? "/"}\n`);
-  }
+  logRequest(req.method ?? "?", req.url ?? "/");
   try {
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
@@ -85,6 +90,7 @@ const httpServer = app.listen(PORT, HOST, () => {
   process.stderr.write(`TaleShed MCP server (HTTP) listening at ${base}\n`);
   process.stderr.write(`  MCP endpoint: ${base}/mcp\n`);
   process.stderr.write(`  Database: ${dbPath}\n`);
+  process.stderr.write(`  Request/error log: ${ERROR_LOG}\n`);
 });
 
 process.on("SIGINT", () => {
