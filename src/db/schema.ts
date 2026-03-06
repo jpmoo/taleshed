@@ -36,7 +36,8 @@ export function initDatabase(dbPath?: string): Database.Database {
       adjectives TEXT NOT NULL DEFAULT '[]',
       location_id TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
-      meta TEXT
+      meta TEXT,
+      exits TEXT NOT NULL DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS history_ledger (
@@ -62,6 +63,12 @@ export function initDatabase(dbPath?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_world_active ON world_graph(is_active);
   `);
 
+  // Migration: add exits column if missing (existing DBs)
+  const hasExits = db.prepare("SELECT 1 FROM pragma_table_info('world_graph') WHERE name = 'exits'").get();
+  if (!hasExits) {
+    db.exec("ALTER TABLE world_graph ADD COLUMN exits TEXT NOT NULL DEFAULT '[]'");
+  }
+
   return db;
 }
 
@@ -76,6 +83,8 @@ export interface WorldNode {
   location_id: string | null;
   is_active: number;
   meta: string | null;
+  /** JSON array of { label: string, target: string } for location nodes; default '[]' */
+  exits?: string;
 }
 
 export interface HistoryEntry {

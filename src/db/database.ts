@@ -82,6 +82,10 @@ export function updateWorldGraphAdjectives(db: Database.Database, nodeId: string
   db.prepare("UPDATE world_graph SET adjectives = ? WHERE node_id = ?").run(adjectivesJson, nodeId);
 }
 
+export function updateWorldGraphLocation(db: Database.Database, nodeId: string, locationId: string | null): void {
+  db.prepare("UPDATE world_graph SET location_id = ? WHERE node_id = ?").run(locationId, nodeId);
+}
+
 export function deleteHistoryAfterEntryId(db: Database.Database, entryId: number): void {
   db.prepare("DELETE FROM history_ledger WHERE entry_id > ?").run(entryId);
 }

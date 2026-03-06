@@ -13,6 +13,7 @@ import {
   getFullVocabulary,
   writeHistoryLedger,
   updateWorldGraphAdjectives,
+  updateWorldGraphLocation,
   insertVocabulary,
 } from "./db/database.js";
 import type { WorldNode } from "./db/schema.js";
@@ -30,6 +31,21 @@ const OLLAMA_UNREACHABLE_PROSE =
 
 const MALFORMED_RESPONSE_PROSE =
   "The world flickers uncertainly. (Engine: The story engine could not interpret the outcome. Please try again.)";
+
+/** Parse exits JSON from a location node; returns { label, target }[]. */
+function safeParseExits(val: string | undefined | null): { label: string; target: string }[] {
+  try {
+    if (!val) return [];
+    const parsed = JSON.parse(val);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((e): e is { label?: string; target?: string } => e != null && typeof e === "object")
+      .map((e) => ({ label: String(e.label ?? ""), target: String(e.target ?? "") }))
+      .filter((e) => e.target.length > 0);
+  } catch {
+    return [];
+  }
+}
 
 /** Parse adjectives from DB (may be invalid/corrupt); always returns a string[]. */
 function safeParseAdjectives(val: string | unknown): string[] {
@@ -85,12 +101,15 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
     rule_description: v.rule_description,
   }));
 
+  const locationExits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+
   return {
     location: toSceneEntity(location, getRecentHistoryForNode(db, location.node_id, 3).map((h) => h.prose_impact ?? "")),
     entities,
     player: playerEntity,
     inventoryNodeIds,
     vocabulary,
+    locationExits,
   };
 }
 
@@ -158,6 +177,10 @@ export async function takeTurn(
         prose_impact: i.prose_impact ?? "No change.",
         adjectives_old: safeParseAdjectives(i.adjectives_old),
         adjectives_new: safeParseAdjectives(i.adjectives_new),
+        new_location_id:
+          i.new_location_id != null && String(i.new_location_id).trim() !== ""
+            ? String(i.new_location_id).trim()
+            : undefined,
       },
     ])
   );
@@ -171,6 +194,7 @@ export async function takeTurn(
         prose_impact: "No change.",
         adjectives_old: adj,
         adjectives_new: adj,
+        new_location_id: undefined,
       };
     }
     impactByNode.set(nodeId, entry);
@@ -199,6 +223,9 @@ export async function takeTurn(
         const newJson = JSON.stringify(entry.adjectives_new);
         if (oldJson !== newJson) {
           updateWorldGraphAdjectives(db, node_id, newJson);
+        }
+        if (entry.new_location_id != null) {
+          updateWorldGraphLocation(db, node_id, entry.new_location_id);
         }
       }
       for (const na of mistralResponse.new_adjectives ?? []) {

@@ -38,12 +38,18 @@ export interface SceneEntity {
   recent_history: string[];
 }
 
+export interface LocationExit {
+  label: string;
+  target: string;
+}
+
 export interface SceneContext {
   location: SceneEntity;
   entities: SceneEntity[];
   player: SceneEntity;
   inventoryNodeIds: string[];
   vocabulary: VocabularyItem[];
+  locationExits: LocationExit[];
 }
 
 export interface MistralNodeImpact {
@@ -51,6 +57,8 @@ export interface MistralNodeImpact {
   prose_impact: string;
   adjectives_old: string[];
   adjectives_new: string[];
+  /** Optional: move this object to another location; use "player_inventory" when the player takes it */
+  new_location_id?: string | null;
 }
 
 export interface MistralNewAdjective {
@@ -70,7 +78,9 @@ function buildSectionA(): string {
   return `You are a game master for a text-based interactive fiction engine.
 Your job is to determine what happens in the world when the player takes an action.
 You must return ONLY valid JSON. No prose outside the JSON structure.
-You must return exactly the fields described below and nothing else.`;
+You must return exactly the fields described below and nothing else.
+
+CRITICAL: Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist. If the scene lists no exits, this location has no exits — say so if the player asks. Never describe or imply a door, corridor, or other room that is not in the entity list.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -104,6 +114,15 @@ ENTITIES PRESENT:
   out += `- node_id: player | location: ${(ctx.player as { location_id?: string }).location_id ?? "?"} | adjectives: ${JSON.stringify(playerAdj)}\n`;
   out += `  Inventory: ${JSON.stringify(ctx.inventoryNodeIds)}\n`;
   out += `  Recent history: ${ctx.player.recent_history.join(" ")}\n`;
+  const exits = ctx.locationExits ?? [];
+  if (exits.length === 0) {
+    out += `\nEXITS FROM THIS LOCATION: (none)\n`;
+  } else {
+    out += `\nEXITS FROM THIS LOCATION (only these exist; do not invent others):\n`;
+    for (const e of exits) {
+      out += `  - ${e.label} -> ${e.target}\n`;
+    }
+  }
   return out;
 }
 
@@ -126,7 +145,8 @@ Return ONLY this JSON structure:
       "node_id": "<string>",
       "prose_impact": "<string: what this node experienced>",
       "adjectives_old": ["<string>"],
-      "adjectives_new": ["<string>"]
+      "adjectives_new": ["<string>"],
+      "new_location_id": "<optional: \"player_inventory\" when player takes an object; a location node_id when player moves (use node_id \"player\" with new_location_id = destination); omit if no move>"
     }
   ],
   "new_adjectives": [
