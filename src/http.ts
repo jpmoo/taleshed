@@ -111,6 +111,18 @@ app.use((req: import("node:http").IncomingMessage & { method?: string; headers?:
 
 const handleMcp = async (req: import("node:http").IncomingMessage & { body?: unknown; method?: string; url?: string; headers?: Record<string, string | string[] | undefined> }, res: import("node:http").ServerResponse) => {
   logRequest(req.method ?? "?", req.url ?? "/", req);
+  if (DEBUG && req.body !== undefined) {
+    const bodyStr = typeof req.body === "string" ? req.body : JSON.stringify(req.body, null, 2);
+    const maxLen = 15000;
+    const truncated = bodyStr.length > maxLen ? bodyStr.slice(0, maxLen) + "\n... [truncated]\n" : bodyStr;
+    try {
+      appendLog(ERROR_LOG, `[DEBUG] Claude request body:\n${truncated}\n`);
+    } catch {
+      try {
+        appendLog("/tmp/taleshed-errors.log", `[DEBUG] Claude request body:\n${truncated}\n`);
+      } catch (_) {}
+    }
+  }
   if (DEBUG) {
     res.on("finish", () => {
       try {

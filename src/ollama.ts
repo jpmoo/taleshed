@@ -3,6 +3,23 @@
  * Spec Section 4.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEBUG_LOG_PATH = path.join(__dirname, "..", "taleshed-errors.log");
+const DEBUG =
+  process.env["TALESHED_DEBUG"] === "1" || process.env["TALESHED_DEBUG"] === "true";
+
+function debugLog(label: string, payload: string) {
+  if (!DEBUG) return;
+  const line = `[${new Date().toISOString()}] [DEBUG] ${label}\n${payload}\n`;
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, line);
+  } catch (_) {}
+}
+
 const OLLAMA_BASE = process.env["OLLAMA_BASE"] ?? "http://localhost:11434";
 const OLLAMA_MODEL = process.env["OLLAMA_MODEL"] ?? "mistral";
 const OLLAMA_TIMEOUT_MS = 30_000;
@@ -136,6 +153,9 @@ export function assemblePrompt(ctx: SceneContext, playerCommand: string, recentH
 }
 
 export async function callOllama(prompt: string): Promise<string> {
+  if (DEBUG) {
+    debugLog("Ollama request", `POST ${OLLAMA_BASE}/api/generate\nmodel: ${OLLAMA_MODEL}\n\n--- prompt ---\n${prompt}\n--- end prompt ---`);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
   try {
@@ -153,11 +173,19 @@ export async function callOllama(prompt: string): Promise<string> {
     clearTimeout(timeout);
     if (!res.ok) {
       const text = await res.text();
+      if (DEBUG) debugLog("Ollama response (error)", `${res.status} ${text}`);
       throw new Error(`Ollama HTTP ${res.status}: ${text}`);
     }
     const data = (await res.json()) as { response?: string; error?: string };
-    if (data.error) throw new Error(data.error);
-    return data.response ?? "";
+    if (data.error) {
+      if (DEBUG) debugLog("Ollama response (error)", data.error);
+      throw new Error(data.error);
+    }
+    const responseText = data.response ?? "";
+    if (DEBUG) {
+      debugLog("Ollama response", responseText);
+    }
+    return responseText;
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof Error) {
@@ -176,11 +204,27 @@ const REQUIRED_JSON_FIELDS = [
   "reconciliation_notes",
 ] as const;
 
+/** Try to extract a JSON object from model output (handles markdown code blocks and leading/trailing prose). */
+function extractJsonString(raw: string): string {
+  const trimmed = raw.trim();
+  // Markdown code block: ```json ... ``` or ``` ... ```
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    const inner = codeBlockMatch[1].trim();
+    const start = inner.indexOf("{");
+    const end = inner.lastIndexOf("}") + 1;
+    if (start >= 0 && end > start) return inner.slice(start, end);
+    return inner;
+  }
+  // Plain text: first { to last }
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}") + 1;
+  if (start >= 0 && end > start) return trimmed.slice(start, end);
+  return trimmed;
+}
+
 function parseJsonResponse(responseText: string): MistralResponse {
-  const trimmed = responseText.trim();
-  const jsonStart = trimmed.indexOf("{");
-  const jsonEnd = trimmed.lastIndexOf("}") + 1;
-  const jsonStr = jsonStart >= 0 && jsonEnd > jsonStart ? trimmed.slice(jsonStart, jsonEnd) : trimmed;
+  const jsonStr = extractJsonString(responseText);
   const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
   for (const key of REQUIRED_JSON_FIELDS) {
     if (!(key in parsed)) throw new Error(`Missing required field: ${key}`);
@@ -196,6 +240,26 @@ function parseJsonResponse(responseText: string): MistralResponse {
   return parsed as unknown as MistralResponse;
 }
 
+/** When the model returns plain prose instead of JSON, coerce it into a valid response so the game continues. */
+function proseFallback(ctx: SceneContext, responseText: string): MistralResponse {
+  const location = ctx.location;
+  const adj = Array.isArray(location.adjectives) ? location.adjectives : [];
+  return {
+    narrative_prose: responseText.trim() || "Something happens.",
+    action_result: "partial",
+    node_impacts: [
+      {
+        node_id: location.node_id,
+        prose_impact: responseText.trim() || "No change.",
+        adjectives_old: adj,
+        adjectives_new: adj,
+      },
+    ],
+    new_adjectives: [],
+    reconciliation_notes: null,
+  };
+}
+
 export async function runMistralTurn(
   ctx: SceneContext,
   playerCommand: string,
@@ -203,7 +267,11 @@ export async function runMistralTurn(
 ): Promise<MistralResponse> {
   const prompt = assemblePrompt(ctx, playerCommand, recentHistory);
   const responseText = await callOllama(prompt);
-  return parseJsonResponse(responseText);
+  try {
+    return parseJsonResponse(responseText);
+  } catch {
+    return proseFallback(ctx, responseText);
+  }
 }
 
 export async function checkOllamaReachable(): Promise<boolean> {
