@@ -7,23 +7,52 @@
 
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
 
-const CWD = process.cwd();
-const ERROR_LOG = path.join(CWD, "taleshed-errors.log");
+// Log next to project root (parent of dist/), not cwd, so it works from systemd/any cwd
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+let ERROR_LOG = path.join(PROJECT_ROOT, "taleshed-errors.log");
+
+function appendLog(logPath: string, line: string) {
+  fs.appendFileSync(logPath, line);
+}
 function logError(label: string, err: unknown) {
   const line = `[${new Date().toISOString()}] ${label} ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`;
-  fs.appendFileSync(ERROR_LOG, line);
+  try {
+    appendLog(ERROR_LOG, line);
+  } catch {
+    try {
+      appendLog("/tmp/taleshed-errors.log", line);
+    } catch (_) {}
+  }
   console.error("[TaleShed]", label, err);
 }
 function logRequest(method: string, url: string) {
   const line = `[${new Date().toISOString()}] ${method} ${url}\n`;
-  fs.appendFileSync(ERROR_LOG, line);
+  try {
+    appendLog(ERROR_LOG, line);
+  } catch {
+    try {
+      appendLog("/tmp/taleshed-errors.log", line);
+    } catch (_) {}
+  }
 }
-// Create log file at startup so it exists and we know where we're logging
-fs.appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] TaleShed started (cwd=${CWD}, log=${ERROR_LOG})\n`);
+
+// Create log file at startup; fall back to /tmp if project dir not writable
+const startupLine = `[${new Date().toISOString()}] TaleShed started (project=${PROJECT_ROOT}, log=${ERROR_LOG}, cwd=${process.cwd()})\n`;
+try {
+  appendLog(ERROR_LOG, startupLine);
+} catch {
+  ERROR_LOG = "/tmp/taleshed-errors.log";
+  try {
+    appendLog(ERROR_LOG, startupLine);
+  } catch (_) {}
+}
+process.stderr.write(`[TaleShed] Log file: ${ERROR_LOG}\n`);
 
 const PORT = Number(process.env["TALESHED_PORT"] ?? process.env["PORT"] ?? 3000);
 const HOST = process.env["TALESHED_HOST"] ?? "0.0.0.0";
