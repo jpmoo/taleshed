@@ -69,8 +69,11 @@ function parseAdjectives(adjectivesJson: string): string[] {
   }
 }
 
+/** Containment is uniform: any node (player, NPC, or object) can contain others via location_id. Player inventory = entities whose location_id is the player node; same for NPCs; objects in a bracket have location_id = that bracket's node_id. */
 export function getPlayerInventory(db: Database.Database): WorldNode[] {
-  return getEntitiesInLocation(db, "player_inventory");
+  const player = getPlayer(db);
+  if (!player) return [];
+  return getEntitiesInLocation(db, player.node_id);
 }
 
 export function getRecentHistoryForNode(db: Database.Database, nodeId: string, limit: number): HistoryEntry[] {

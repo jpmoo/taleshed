@@ -124,8 +124,9 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const npcIdsInRoom = new Set(
     inLocationRaw.filter((n) => n.node_type === "npc").map((n) => n.node_id)
   );
+  // Only show entities in the room: exclude anything whose location is the player or an NPC (player/NPC inventory).
   const inLocation = inLocationRaw.filter((n) => {
-    if (n.location_id === "player_inventory") return false;
+    if (n.location_id === player.node_id) return false;
     if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
     return true;
   });
@@ -346,9 +347,12 @@ export async function takeTurn(
         }
         if (entry.new_location_id != null) {
           const raw = String(entry.new_location_id).trim();
-          const isPlayerInventory = raw.toLowerCase() === "player_inventory";
+          const playerNode = getPlayer(db);
+          const playerNodeId = playerNode?.node_id ?? "player";
+          const isPlayerInventory =
+            raw.toLowerCase() === "player_inventory" || raw === playerNodeId;
           const resolvedId = isPlayerInventory
-            ? "player_inventory"
+            ? playerNodeId
             : getNode(db, raw)
               ? raw
               : resolveLocationNodeId(db, raw);
