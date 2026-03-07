@@ -360,6 +360,15 @@ export async function takeTurn(
             console.warn(
               `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: no such location in world_graph (model may have invented a location).`
             );
+          } else if (node.node_type === "player") {
+            const targetNode = getNode(db, resolvedId);
+            if (targetNode?.node_type === "location") {
+              updateWorldGraphLocation(db, node_id, resolvedId);
+            } else {
+              console.warn(
+                `[TaleShed] Ignoring new_location_id "${raw}" for player: player location must be a location node, not ${targetNode?.node_type ?? "unknown"}.`
+              );
+            }
           } else {
             updateWorldGraphLocation(db, node_id, resolvedId);
           }
