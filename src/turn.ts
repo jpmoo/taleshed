@@ -23,6 +23,7 @@ import {
   checkOllamaReachable,
   fetchAdjectiveDefinitions,
   resolveRedundantAdjectives,
+  debugLog,
   type SceneContext,
   type SceneEntity,
   type MistralResponse,
@@ -149,6 +150,8 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   }));
 
   const locationExits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+
+  debugLog("scene entities", `location: ${location.node_id} | entity node_ids: ${entities.map((e) => e.node_id).join(", ")}`);
 
   return {
     location: toSceneEntity(

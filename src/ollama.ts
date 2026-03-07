@@ -126,7 +126,7 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it—not only a fixture like "empty bracket" when the object (e.g. The Torch) is in the list.
+ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it—not only a fixture like "empty bracket" when the object (e.g. The Torch) is in the list. If an object is listed here (e.g. torch_01, The Torch), the room HAS that object: never say it is absent, missing, or that only an empty fixture remains; describe it as present so the player can take or use it.
 `;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
