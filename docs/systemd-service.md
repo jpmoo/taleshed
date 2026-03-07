@@ -134,6 +134,8 @@ If either the MCP server or the authoring server exits, the script exits and sys
 
 **If the service keeps restarting (exit code 1):** check logs with `journalctl -u taleshed -n 80 --no-pager`. The authoring server exits with code 1 if `TALESHED_WEB_API_KEY` is missing or empty in `.env` — add it and restart. If you see "node not found", set `Environment=NODE=/full/path/to/node` (or add Node to `PATH`) in the service file.
 
+**If you see status=203/EXEC:** systemd could not execute the script. Check: (1) the path in `ExecStart` is correct and the file exists, (2) the script is executable (`chmod +x /home/jpmoo/taleshed/scripts/run-with-authoring.sh`), (3) the script has Unix line endings — if it was edited on Windows or copied with CRLF, run `sed -i 's/\r$//' /home/jpmoo/taleshed/scripts/run-with-authoring.sh` on the server, then `systemctl restart taleshed`.
+
 ---
 
 ## Option C: Two separate services (MCP and authoring)

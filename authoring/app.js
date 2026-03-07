@@ -7,15 +7,21 @@
   const BOX = 5 * BLOCK;
   const LINE_LEN = 2 * BLOCK;
 
+  /** Base URL for API (e.g. "" for same origin, or "/taleshed" if behind a path proxy). Set window.TALESHED_API_BASE if needed. */
+  function getApiBase() {
+    return (typeof window !== "undefined" && window.TALESHED_API_BASE) || "";
+  }
+
   function getApiKey() {
     const params = new URLSearchParams(window.location.search);
     return params.get("api") || "";
   }
 
   function apiUrl(path) {
+    const base = getApiBase();
     const key = getApiKey();
     const sep = path.includes("?") ? "&" : "?";
-    return path + (key ? sep + "api=" + encodeURIComponent(key) : "");
+    return base + path + (key ? sep + "api=" + encodeURIComponent(key) : "");
   }
 
   let allNodes = [];
@@ -26,19 +32,29 @@
   let panState = null;
   let dragState = null;
 
+  function showApiMessage(message) {
+    var warn = document.getElementById("api-warn");
+    if (warn) {
+      warn.textContent = message;
+      warn.classList.remove("hidden");
+    }
+  }
+  function hideApiMessage() {
+    var warn = document.getElementById("api-warn");
+    if (warn) warn.classList.add("hidden");
+  }
+
   function fetchGraph() {
     const key = getApiKey();
-    const warn = document.getElementById("api-warn");
     if (!key) {
-      warn.classList.remove("hidden");
+      showApiMessage("No API key given. Add ?api=YOUR_KEY to the URL to load data.");
       return;
     }
-    warn.classList.add("hidden");
+    hideApiMessage();
     fetch(apiUrl("/api/world-graph"))
       .then((r) => {
         if (r.status === 401) {
-          warn.textContent = "Invalid or missing API key. Use ?api=YOUR_KEY in the URL.";
-          warn.classList.remove("hidden");
+          showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
           throw new Error("Unauthorized");
         }
         return r.json();
@@ -52,6 +68,8 @@
           if (loc.grid_y == null && loc.grid_y !== 0) loc.grid_y = 0;
         });
         render();
+        var nodesPanel = document.getElementById("panel-nodes");
+        if (nodesPanel && nodesPanel.classList.contains("active")) renderNodes();
       })
       .catch((e) => {
         if (e.message !== "Unauthorized") console.error(e);
@@ -154,6 +172,10 @@
 
   function setupPanAndDrag() {
     const wrap = document.getElementById("grid-wrap");
+    if (!wrap) {
+      console.warn("TaleShed: grid-wrap not found, pan/drag/dblclick disabled.");
+      return;
+    }
 
     function onMove(e) {
       if (panState) {
@@ -284,7 +306,7 @@
         })
         .then((r) => {
           if (r.status === 401) {
-            alert("API key invalid or missing.");
+            showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
             return;
           }
           if (!r.ok) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
@@ -308,7 +330,7 @@
     fetch(apiUrl("/api/world-graph/" + encodeURIComponent(nodeId)), { method: "DELETE" })
       .then((r) => {
         if (r.status === 401) {
-          alert("API key invalid or missing.");
+          showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
           return;
         }
         if (r.status !== 204 && r.status !== 200) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
@@ -330,6 +352,7 @@
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",
   };
   function switchPanel(panelId) {
+    if (!panelId) return;
     document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
     const panel = document.getElementById(panelId);
@@ -338,13 +361,21 @@
     if (btn) btn.classList.add("active");
     const sub = document.getElementById("subtitle");
     if (sub && SUBTITLES[panelId]) sub.textContent = SUBTITLES[panelId];
+    if (panelId === "panel-world-graph") fetchGraph();
     if (panelId === "panel-history") fetchHistory();
     if (panelId === "panel-vocabulary") fetchVocabulary();
-    if (panelId === "panel-nodes") renderNodes();
+    if (panelId === "panel-nodes") fetchGraph(); /* renderNodes() called from fetchGraph when data loads if this panel is active */
   }
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => switchPanel(btn.getAttribute("data-panel")));
-  });
+  var nav = document.querySelector(".bottom-nav");
+  if (nav) {
+    nav.addEventListener("click", function (e) {
+      var btn = e.target && e.target.closest && e.target.closest(".nav-btn");
+      if (btn && btn.getAttribute("data-panel")) switchPanel(btn.getAttribute("data-panel"));
+    });
+  }
+
+  setupPanAndDrag();
+  fetchGraph();
 
   // --- History Ledger ---
   function fetchHistory() {
@@ -665,7 +696,7 @@
       })
         .then((r) => {
           if (r.status === 401) {
-            alert("API key invalid or missing.");
+            showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
             return;
           }
           if (!r.ok) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
@@ -685,7 +716,7 @@
       })
         .then((r) => {
           if (r.status === 401) {
-            alert("API key invalid or missing.");
+            showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
             return;
           }
           if (!r.ok) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
