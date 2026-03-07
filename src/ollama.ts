@@ -97,7 +97,13 @@ PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inve
 
 When writing narrative_prose:
 - You MUST mention the location, every entity in ENTITIES PRESENT, and every exit in EXITS FROM THIS LOCATION. Describe the location/room first, then each NPC by name, then each object, then the exits (direction and destination for each). For each object in the list, mention the object itself (e.g. "the torch", "an unlit torch in the bracket") so the player can refer to it (e.g. "take torch"). For each exit, give direction and where it leads (e.g. "To the east, a battered door leads to the kitchen") so the player can move. Do not describe only a container or fixture (e.g. "an empty torch bracket") when the entity list includes that object—if The Torch is listed, say where the torch is or that it is there, not only the bracket. Never add people or objects not in the list; never omit a listed entity or a listed exit.
-- Do only what the user asked. Do not take extra actions on any item or object unless the user explicitly says to. If the user says "take X", only add X to inventory—do not also use it, light it, activate it, or otherwise change its state unless the user explicitly asks for that. If the user says "take X and go through door", do exactly those two things and nothing more.
+
+CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
+- Interpret the player's action literally. Do only the exact action(s) the player stated. Do not infer, assume, or add any action the player did not explicitly request.
+- "Take X" means only: add X to the player's inventory. It does NOT mean use X, light X, activate X, open X, or change X's state in any way. Example: if the player says "take torch", the torch is now in inventory and remains unlit (or whatever state it was in). Do not describe the torch as lit, burning, or casting light unless the player explicitly said to light it (e.g. "light the torch", "take torch and light it").
+- For any object: taking it does not imply using it. Using, lighting, activating, opening, or otherwise changing an object's state requires an explicit player command for that action. One verb = one action. "Take torch and go through door" = take (inventory) + move; the torch is still unlit unless the player also said to light it.
+- If the player's command has multiple parts (e.g. "take X and go through door"), perform exactly those parts and no others. Do not add a third action (e.g. lighting the torch) because it would be "helpful" or "realistic"—only the player can request that.
+
 - An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
 - If the player tries to take or use something not in ENTITIES PRESENT, the action fails.`;
 }
@@ -158,6 +164,7 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
       ? `\nMOVEMENT: If the player goes through a door/exit, says a direction ("east", "go west"), or says they go back/return to a place ("go back to scriptorium"), set the player's new_location_id to the exact target node_id from EXITS (e.g. "kitchen", "scriptorium"). Apply every part of a compound command. Without the player's new_location_id the engine will not move them.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
+Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch").
 ${exitLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine. If your narrative describes an NPC's demeanor or attitude shifting (e.g. less guarded, more receptive), set that NPC's adjectives_new to match (e.g. ["less guarded"]) so the engine state and the story stay in sync.
 
@@ -283,6 +290,82 @@ function extractSingleJsonObjectString(raw: string): string | null {
 }
 
 /**
+ * Before adding new vocabulary: check if any candidate adjective is redundant with an existing term.
+ * Returns a Map from candidate (lowercase) to the term to use—either the existing vocabulary term
+ * (exact match from the list) or the candidate itself if it is truly new.
+ */
+export async function resolveRedundantAdjectives(
+  candidates: string[],
+  existingVocabulary: { adjective: string }[]
+): Promise<Map<string, string>> {
+  if (candidates.length === 0 || existingVocabulary.length === 0) {
+    const m = new Map<string, string>();
+    candidates.forEach((c) => {
+      const k = c.trim().toLowerCase();
+      if (k) m.set(k, c.trim());
+    });
+    return m;
+  }
+  const terms = [...new Set(candidates)].map((c) => c.trim()).filter(Boolean);
+  if (terms.length === 0) return new Map();
+  const vocabList = existingVocabulary.map((v) => v.adjective.trim()).filter(Boolean);
+  const vocabLower = new Set(vocabList.map((v) => v.toLowerCase()));
+  const prompt = `You are normalizing game-state adjectives for a text adventure.
+
+EXISTING VOCABULARY (use these exact spellings when replacing):
+${vocabList.map((a) => `- ${a}`).join("\n")}
+
+CANDIDATE TERMS (these are not in the vocabulary yet; some may be redundant with existing terms above):
+${terms.join(", ")}
+
+For each candidate term: if it has the same or very similar meaning to an existing vocabulary term, respond with that existing term exactly as listed above. Otherwise respond with the candidate unchanged (the game will define it as new).
+
+CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be either an existing vocabulary term (exact spelling from the list) or the candidate itself. Example: {"content": "settled", "warm": "warm"} if "content" is redundant with "settled" and "warm" is new.
+
+Return ONLY the JSON object. No other text.`;
+  if (DEBUG) {
+    debugLog(
+      "resolveRedundantAdjectives request",
+      `candidates: ${terms.join(", ")}\nvocabulary (${vocabList.length} terms): ${vocabList.join(", ")}`
+    );
+  }
+  const logLabel = "resolve redundant adjectives";
+  try {
+    const responseText = await callOllama(prompt, logLabel);
+    if (DEBUG) debugLog("resolveRedundantAdjectives reply (raw)", responseText);
+    const objStr = extractJsonString(responseText);
+    if (!objStr || !objStr.trimStart().startsWith("{")) return new Map();
+    const parsed = JSON.parse(objStr) as Record<string, unknown>;
+    const result = new Map<string, string>();
+    for (const candidate of terms) {
+      const key = candidate.toLowerCase();
+      const raw = parsed[candidate] ?? parsed[key];
+      const value = raw != null && typeof raw === "string" ? String(raw).trim() : candidate.trim();
+      const valueLower = value.toLowerCase();
+      if (vocabLower.has(valueLower)) {
+        const existing = vocabList.find((v) => v.toLowerCase() === valueLower)!;
+        result.set(key, existing);
+      } else {
+        result.set(key, value || candidate.trim());
+      }
+    }
+    if (DEBUG) {
+      const summary = Object.fromEntries(result);
+      debugLog("resolveRedundantAdjectives result", JSON.stringify(summary, null, 2));
+    }
+    return result;
+  } catch (err) {
+    if (DEBUG) debugLog("resolveRedundantAdjectives error", err instanceof Error ? err.message : String(err));
+    const fallback = new Map<string, string>();
+    terms.forEach((c) => {
+      const k = c.trim().toLowerCase();
+      if (k) fallback.set(k, c.trim());
+    });
+    return fallback;
+  }
+}
+
+/**
  * Second call: fetch definitions for adjectives that appeared in the turn but are not in vocabulary.
  * Uses existing vocabulary so new terms can be defined in relation to them (e.g. "less guarded" given "guarded").
  * Definitions must be generic and transportable (apply to any node: location, object, NPC).
@@ -291,7 +374,8 @@ function extractSingleJsonObjectString(raw: string): string | null {
 export async function fetchAdjectiveDefinitions(
   adjectives: string[],
   existingVocabulary: { adjective: string; rule_description: string }[],
-  callSource?: string
+  callSource?: string,
+  allowFallback = true
 ): Promise<{ adjective: string; rule_description: string }[]> {
   if (adjectives.length === 0) return [];
   const terms = [...new Set(adjectives)].map((a) => a.trim()).filter(Boolean);
@@ -301,13 +385,16 @@ export async function fetchAdjectiveDefinitions(
     existingVocabulary.length > 0
       ? `EXISTING VOCABULARY (use these to define new terms in relation when appropriate, e.g. "less guarded" from "guarded"):\n${existingVocabulary.map((v) => `- ${v.adjective}: ${v.rule_description}`).join("\n")}\n\n`
       : "";
+  const termList = terms.join(", ");
   const prompt = `You are defining game-state adjectives for a text adventure. These definitions are generic and transportable: they apply to any node (location, object, NPC). Do not refer to specific characters, places, or objects.
 
 ${vocabBlock}Define each NEW term below. For each term, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that.
 
 CRITICAL: The "adjective" field in each object must be exactly one of the terms listed in NEW TERMS TO DEFINE—copy the term word-for-word. Do not substitute a synonym or different phrasing.
 
-NEW TERMS TO DEFINE: ${terms.join(", ")}
+CRITICAL: You MUST return one object for EVERY term. There are ${terms.length} terms below. Your response must be a JSON array containing exactly ${terms.length} objects—one per term. Returning only one object or fewer than ${terms.length} is wrong.
+
+NEW TERMS TO DEFINE: ${termList}
 
 Return ONLY a JSON array with one object per term. No other text. Example format (use your actual terms, not these): [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "tense", "rule_description": "Atmosphere is charged with conflict or unease; NPCs may be quick to react."}]`;
   try {
@@ -329,12 +416,21 @@ Return ONLY a JSON array with one object per term. No other text. Example format
         }
       }
     }
-    return items
+    const result = items
       .map((x) => ({
         adjective: typeof x.adjective === "string" ? String(x.adjective).trim().toLowerCase() : "",
         rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
       }))
       .filter((x) => x.adjective.length > 0);
+    // If the model returned fewer definitions than terms, request the missing ones (one round of fallback; no recursion).
+    const definedLower = new Set(result.map((r) => r.adjective));
+    const missing = terms.filter((t) => !definedLower.has(t.trim().toLowerCase()));
+    if (allowFallback && missing.length > 0) {
+      if (DEBUG) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing: ${missing.join(", ")}`);
+      const extra = await fetchAdjectiveDefinitions(missing, existingVocabulary, callSource, false);
+      return [...result, ...extra];
+    }
+    return result;
   } catch (err) {
     if (DEBUG) debugLog("fetchAdjectiveDefinitions error", err instanceof Error ? err.message : String(err));
     return [];

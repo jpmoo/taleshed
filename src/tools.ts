@@ -12,7 +12,7 @@ import {
   insertVocabulary,
   writeHistoryLedger,
 } from "./db/database.js";
-import { fetchAdjectiveDefinitions, debugLog } from "./ollama.js";
+import { fetchAdjectiveDefinitions, resolveRedundantAdjectives, debugLog } from "./ollama.js";
 
 export interface TakeTurnArgs {
   player_command: string;
@@ -65,7 +65,14 @@ export async function handleUpdateNodeAdjectives(
     return out;
   }
   const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
-  const adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
+  let adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
+  const vocabulary = getFullVocabulary(db);
+  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
+  const candidatesNotInVocab = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
+  if (candidatesNotInVocab.length > 0) {
+    const resolveMap = await resolveRedundantAdjectives(candidatesNotInVocab, vocabulary);
+    adjectives = [...new Set(adjectives.map((a) => resolveMap.get(a.toLowerCase()) ?? a))];
+  }
   const currentAdj = parseAdjectives(node.adjectives);
   const newJson = JSON.stringify(adjectives);
   const currentJson = JSON.stringify(currentAdj);
@@ -88,8 +95,6 @@ export async function handleUpdateNodeAdjectives(
       },
     ]);
   })();
-  const vocabulary = getFullVocabulary(db);
-  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
   const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
   if (missing.length > 0) {
     debugLog("update_node_adjectives fetching definitions", JSON.stringify({ terms: missing }));

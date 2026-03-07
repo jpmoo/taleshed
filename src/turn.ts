@@ -22,6 +22,7 @@ import {
   runMistralTurn,
   checkOllamaReachable,
   fetchAdjectiveDefinitions,
+  resolveRedundantAdjectives,
   type SceneContext,
   type SceneEntity,
   type MistralResponse,
@@ -247,6 +248,25 @@ export async function takeTurn(
       };
     }
     impactByNode.set(nodeId, entry);
+  }
+
+  const vocabulary = getFullVocabulary(db);
+  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
+  const candidatesNotInVocab = new Set<string>();
+  for (const [, entry] of impactByNode) {
+    for (const a of entry.adjectives_new) {
+      const t = String(a).trim();
+      if (t && !vocabLower.has(t.toLowerCase())) candidatesNotInVocab.add(t);
+    }
+  }
+  if (candidatesNotInVocab.size > 0) {
+    const resolveMap = await resolveRedundantAdjectives([...candidatesNotInVocab], vocabulary);
+    for (const [, entry] of impactByNode) {
+      const normalized = entry.adjectives_new
+        .map((a) => resolveMap.get(String(a).trim().toLowerCase()) ?? String(a).trim())
+        .filter(Boolean);
+      entry.adjectives_new = [...new Set(normalized)];
+    }
   }
 
   const ledgerEntries = Array.from(impactByNode.entries()).map(([node_id, entry]) => ({
