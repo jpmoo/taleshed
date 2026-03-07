@@ -194,9 +194,10 @@ export function assemblePrompt(ctx: SceneContext, playerCommand: string, recentH
   return sections.join("\n\n");
 }
 
-export async function callOllama(prompt: string): Promise<string> {
+export async function callOllama(prompt: string, logLabel?: string): Promise<string> {
+  const label = logLabel ? ` (${logLabel})` : "";
   if (DEBUG) {
-    debugLog("Ollama request", `POST ${OLLAMA_BASE}/api/generate\nmodel: ${OLLAMA_MODEL}\n\n--- prompt ---\n${prompt}\n--- end prompt ---`);
+    debugLog(`Ollama request${label}`, `POST ${OLLAMA_BASE}/api/generate\nmodel: ${OLLAMA_MODEL}\n\n--- prompt ---\n${prompt}\n--- end prompt ---`);
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
@@ -215,17 +216,17 @@ export async function callOllama(prompt: string): Promise<string> {
     clearTimeout(timeout);
     if (!res.ok) {
       const text = await res.text();
-      if (DEBUG) debugLog("Ollama response (error)", `${res.status} ${text}`);
+      if (DEBUG) debugLog(`Ollama response${label} (error)`, `${res.status} ${text}`);
       throw new Error(`Ollama HTTP ${res.status}: ${text}`);
     }
     const data = (await res.json()) as { response?: string; error?: string };
     if (data.error) {
-      if (DEBUG) debugLog("Ollama response (error)", data.error);
+      if (DEBUG) debugLog(`Ollama response${label} (error)`, data.error);
       throw new Error(data.error);
     }
     const responseText = data.response ?? "";
     if (DEBUG) {
-      debugLog("Ollama response", responseText);
+      debugLog(`Ollama response${label}`, responseText);
     }
     return responseText;
   } catch (err) {
@@ -292,7 +293,7 @@ Terms: ${terms.join(", ")}
 
 Example format: [{"adjective": "lit", "rule_description": "Provides light in dark locations."}]`;
   try {
-    const responseText = await callOllama(prompt);
+    const responseText = await callOllama(prompt, "vocabulary definitions");
     const jsonStr = extractJsonArrayString(responseText);
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) return [];
