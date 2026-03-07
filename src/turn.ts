@@ -8,6 +8,7 @@ import {
   getPlayer,
   getNode,
   getEntitiesInLocation,
+  getEntitiesInLocationIncludingContents,
   getPlayerInventory,
   getRecentHistoryForNode,
   getFullVocabulary,
@@ -118,7 +119,15 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const location = getNode(db, locationId);
   if (!location) return null;
 
-  const inLocation = getEntitiesInLocation(db, locationId);
+  const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
+  const npcIdsInRoom = new Set(
+    inLocationRaw.filter((n) => n.node_type === "npc").map((n) => n.node_id)
+  );
+  const inLocation = inLocationRaw.filter((n) => {
+    if (n.location_id === "player_inventory") return false;
+    if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
+    return true;
+  });
   const inventory = getPlayerInventory(db);
   const inventoryNodeIds = inventory.map((n) => n.node_id);
 
@@ -282,6 +291,35 @@ export async function takeTurn(
     system_event: null as string | null,
   }));
 
+  const newAdjsRaw = Array.isArray(mistralResponse.new_adjectives) ? mistralResponse.new_adjectives : [];
+  const newAdjCandidates = new Set<string>();
+  for (const na of newAdjsRaw) {
+    const adj =
+      na && typeof na === "object" && typeof (na as { adjective?: unknown }).adjective === "string"
+        ? (na as { adjective: string }).adjective.trim()
+        : "";
+    if (adj && !vocabLower.has(adj.toLowerCase())) newAdjCandidates.add(adj);
+  }
+  let newAdjToInsert: { adjective: string; rule_description: string }[] = [];
+  if (newAdjCandidates.size > 0) {
+    const resolveMapNew = await resolveRedundantAdjectives([...newAdjCandidates], vocabulary);
+    for (const na of newAdjsRaw) {
+      const adj =
+        na && typeof na === "object" && typeof (na as { adjective?: unknown }).adjective === "string"
+          ? (na as { adjective: string; rule_description?: string }).adjective.trim()
+          : "";
+      if (!adj) continue;
+      const resolved = resolveMapNew.get(adj.toLowerCase()) ?? adj;
+      if (!vocabLower.has(resolved.toLowerCase())) {
+        const rule =
+          na && typeof na === "object" && typeof (na as { rule_description?: unknown }).rule_description === "string"
+            ? (na as { rule_description: string }).rule_description.trim()
+            : "";
+        newAdjToInsert.push({ adjective: resolved, rule_description: rule || "(No description)" });
+      }
+    }
+  }
+
   try {
     db.transaction(() => {
       writeHistoryLedger(db, ledgerEntries);
@@ -317,13 +355,8 @@ export async function takeTurn(
           }
         }
       }
-      const newAdjs = Array.isArray(mistralResponse.new_adjectives) ? mistralResponse.new_adjectives : [];
-      for (const na of newAdjs) {
-        const adj = na && typeof na === "object" && typeof (na as { adjective?: unknown }).adjective === "string" ? (na as { adjective: string; rule_description?: string }).adjective.trim() : "";
-        const rule = na && typeof na === "object" && typeof (na as { rule_description?: unknown }).rule_description === "string" ? (na as { rule_description: string }).rule_description.trim() : "";
-        if (adj) {
-          insertVocabulary(db, adj, rule || "(No description)", 0);
-        }
+      for (const d of newAdjToInsert) {
+        insertVocabulary(db, d.adjective, d.rule_description, 0);
       }
     })();
   } catch (dbErr) {

@@ -93,6 +93,10 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn; if unchanged, set both to the same array. Never omit an entry or leave adjectives blank for a node that has adjectives. Keep narrative and state in sync: if your narrative_prose describes an NPC's disposition or attitude changing (e.g. "his guarded quality shifts", "something adjacent to warmth"), you MUST set that NPC's adjectives_new to reflect it (e.g. ["less guarded"]) so the engine state matches the story.
 - You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
+CRITICAL — WHAT THE PLAYER CAN INTERACT WITH:
+- The player can only take, use, talk to, or otherwise interact with: (1) the current location, (2) entities listed in ENTITIES PRESENT (these are in the player's current location or inside a not-closed container in that location), or (3) items in the player's Inventory. People and objects in other locations are not present and cannot be seen, heard, or interacted with.
+- If the player tries to interact with a person or object not in ENTITIES PRESENT and not in Inventory (e.g. "talk to Ciaran" or "take the scriptorium torch" while in the kitchen when Ciaran or that torch are not listed), the action fails. Say that the person or thing is not here; do not narrate the interaction, move the other character, or bring distant things into the scene.
+
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. Only objects whose node_id is in the player's Inventory are carried or held by the player; objects listed in ENTITIES PRESENT but not in Inventory are in the location (the room), not in the player's hands. Do not describe the player as holding or carrying something unless it is in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
 When writing narrative_prose:
@@ -105,7 +109,7 @@ CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
 - If the player's command has multiple parts (e.g. "take X and go through door"), perform exactly those parts and no others. Do not add a third action (e.g. lighting the torch) because it would be "helpful" or "realistic"—only the player can request that.
 
 - An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
-- If the player tries to take or use something not in ENTITIES PRESENT, the action fails.`;
+- If the player tries to take, use, talk to, or interact with something (or someone) not in ENTITIES PRESENT and not in Inventory, the action fails. The target is not in the room; do not narrate success or bring that person or object into the scene.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -126,7 +130,7 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it—not only a fixture like "empty bracket" when the object (e.g. The Torch) is in the list. If an object is listed here (e.g. torch_01, The Torch), the room HAS that object: never say it is absent, missing, or that only an empty fixture remains; describe it as present so the player can take or use it.
+ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). These are the only people and objects the player can interact with this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present and cannot be interacted with. Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it—not only a fixture like "empty bracket" when the object (e.g. The Torch) is in the list. If an object is listed here (e.g. torch_01, The Torch), the room HAS that object: never say it is absent, missing, or that only an empty fixture remains; describe it as present so the player can take or use it.
 `;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
@@ -233,6 +237,12 @@ export async function callOllama(prompt: string, logLabel?: string): Promise<str
     return responseText;
   } catch (err) {
     clearTimeout(timeout);
+    if (DEBUG) {
+      debugLog(
+        `Ollama response${label} (exception)`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
     if (err instanceof Error) {
       if (err.name === "AbortError") throw new Error("Ollama timeout (30s)");
       throw err;
@@ -397,6 +407,12 @@ CRITICAL: You MUST return one object for EVERY term. There are ${terms.length} t
 NEW TERMS TO DEFINE: ${termList}
 
 Return ONLY a JSON array with one object per term. No other text. Example format (use your actual terms, not these): [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "tense", "rule_description": "Atmosphere is charged with conflict or unease; NPCs may be quick to react."}]`;
+  if (DEBUG) {
+    debugLog(
+      `fetchAdjectiveDefinitions request${callSource ? ` (${callSource})` : ""}`,
+      `terms: ${termList}\nexisting vocabulary count: ${existingVocabulary.length}`
+    );
+  }
   try {
     const responseText = await callOllama(prompt, logLabel);
     let items: Record<string, unknown>[] = [];
@@ -497,7 +513,7 @@ export async function runMistralTurn(
   recentHistory: string
 ): Promise<MistralResponse> {
   const prompt = assemblePrompt(ctx, playerCommand, recentHistory);
-  const responseText = await callOllama(prompt);
+  const responseText = await callOllama(prompt, "turn");
   try {
     return parseJsonResponse(responseText);
   } catch {

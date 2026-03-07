@@ -42,6 +42,33 @@ export function getEntitiesInLocation(db: Database.Database, locationId: string)
     .all(locationId) as WorldNode[];
 }
 
+/** Entities in a location, plus entities contained in objects in that location (one level). Contents are only included if the container is not closed. Order: each direct entity then its contents. */
+export function getEntitiesInLocationIncludingContents(db: Database.Database, locationId: string): WorldNode[] {
+  const direct = getEntitiesInLocation(db, locationId);
+  const result: WorldNode[] = [];
+  for (const node of direct) {
+    result.push(node);
+    if (node.node_type === "object") {
+      const adjectives = parseAdjectives(node.adjectives);
+      if (!adjectives.includes("closed")) {
+        const contents = getEntitiesInLocation(db, node.node_id);
+        for (const c of contents) result.push(c);
+      }
+    }
+  }
+  return result;
+}
+
+function parseAdjectives(adjectivesJson: string): string[] {
+  if (!adjectivesJson || adjectivesJson.trim() === "") return [];
+  try {
+    const arr = JSON.parse(adjectivesJson) as unknown;
+    return Array.isArray(arr) ? arr.filter((a): a is string => typeof a === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function getPlayerInventory(db: Database.Database): WorldNode[] {
   return getEntitiesInLocation(db, "player_inventory");
 }

@@ -25,6 +25,8 @@ const STARTER_VOCABULARY: [string, string][] = [
   ["sacred", "Location or object carries religious or spiritual significance. Disrespectful actions may have consequences."],
   ["dark", "Location has no light source. Actions requiring sight may fail unless the player carries a lit object."],
   ["sealed", "Passage or container is physically blocked and cannot be opened by normal means."],
+  ["open", "Object is open, with items inside visible."],
+  ["closed", "Object is closed; items inside are not visible."],
 ];
 
 function seedVocabulary(): void {
@@ -46,13 +48,14 @@ function seedWorld(): void {
   db.exec(`
     INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y)
     VALUES
-      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket holds an unlit torch. Without a lit flame the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0),
+      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0),
       ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A fire burns in the hearth, casting flickering light.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}', 1, 0),
-      ('torch_01', 'object', 'The Torch', 'The unlit torch in the bracket — dry tow wrapped tight around a wooden handle, waiting for a spark. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
+      ('bracket_01', 'object', 'The Torch Bracket', 'A wrought-iron bracket on the wall, made to hold a torch.', '["open"]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
+      ('torch_01', 'object', 'The Torch', 'An unlit torch: dry tow wrapped tight around a wooden handle, waiting for a spark. It can be taken or lit.', '[]', 'bracket_01', 1, NULL, '[]', NULL, NULL),
       ('ciaran', 'npc', 'Brother Ciarán', 'A monk at a desk, copying a manuscript.', '["guarded"]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
       ('player', 'player', 'Player', 'You.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL);
   `);
-  console.log("Inserted sample world: scriptorium (exit to kitchen), kitchen (fire), torch_01 (takeable), ciaran, player.");
+  console.log("Inserted sample world: scriptorium (exit to kitchen), kitchen (fire), bracket_01, torch_01 (in bracket), ciaran, player.");
 }
 
 clearHistoryLedger();
