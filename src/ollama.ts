@@ -185,20 +185,41 @@ ${recentHistory || "(none)"}
 Check: does the recent narration describe anything inconsistent with the current world state above? If so, note corrections in your response.`;
 }
 
-function buildSectionE(playerCommand: string, locationExits: { label: string; target: string; direction?: string }[]): string {
+function buildSectionE(
+  ctx: SceneContext,
+  playerCommand: string,
+  locationExits: { label: string; target: string; direction?: string }[]
+): string {
+  const loc = ctx.location;
+  const containedBy = new Map<string, string[]>();
+  for (const e of ctx.entities) {
+    const locId = e.location_id ?? null;
+    if (locId != null && locId !== loc.node_id) {
+      const list = containedBy.get(locId) ?? [];
+      list.push(e.node_id);
+      containedBy.set(locId, list);
+    }
+  }
+  const containmentLine =
+    containedBy.size > 0
+      ? `Containment in this scene: ${Array.from(containedBy.entries())
+          .map(([container, contents]) => `${container} contains ${contents.join(", ")}`)
+          .join("; ")}. Do not describe these containers as empty in narrative_prose.\n`
+      : "";
   const exitLine =
     locationExits.length > 0
       ? `\nMOVEMENT (required when player moves): If the player's action is to go through the door, go through door, leave, or use a direction ("east", "go west", etc.), you MUST set the player's new_location_id to that exit's target node_id in the player's node_impacts entry. Example: one exit "east -> kitchen" and player says "go through door" → set player new_location_id to "kitchen". Without this field the engine does not move the player. Exits here: ${locationExits.map((e) => `${e.direction ?? "?"} -> ${e.target}`).join("; ")}.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
-TAKE: If the player takes an object, set that object's new_location_id to the player's node_id (e.g. "player") in its node_impacts entry. Do not add adjectives to the object (e.g. "in player's inventory"); the engine uses new_location_id to move the object. The player's own new_location_id is only for movement—set it only to a location node_id from EXITS (e.g. kitchen), never to an object (e.g. torch_01). The object moves to the player; the player stays in a location.
+START/BEGIN: If the player said "start" or "begin", only describe the scene. Do NOT have the player take, use, or move any object. Do NOT set new_location_id for any object. No state changes.
+${containmentLine}TAKE: If the player takes an object, set that object's new_location_id to the player's node_id (e.g. "player") in its node_impacts entry. Do not add adjectives to the object (e.g. "in player's inventory"); the engine uses new_location_id to move the object. The player's own new_location_id is only for movement—set it only to a location node_id from EXITS (e.g. kitchen), never to an object (e.g. torch_01). The object moves to the player; the player stays in a location.
 Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch").
 ${exitLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. DO NOT change a node's adjectives unless the player's action directly involved that node and your narrative explicitly describes a change in that node's state. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node—no NPC becomes "less guarded" or "more friendly" just because the player entered or looked. Only change adjectives when the player did something to or with that node (e.g. talked to the NPC, used the object) and the narrative shows the change. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them.
 
 Return ONLY this JSON structure:
 {
-  "narrative_prose": "<string: describe location, EVERY entity (each NPC, each object e.g. the torch), EVERY exit (direction and destination); then what happened. For entities that have 'contains:' in the list above, state what is inside them—do not describe those containers as empty>",
+  "narrative_prose": "<string: describe location, EVERY entity, EVERY exit; then what happened. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each (e.g. 'the X holds the Y'). Never describe a listed container as empty.>",
   "action_result": "<success | failure | partial>",
   "node_impacts": [
     {
@@ -219,7 +240,7 @@ export function assemblePrompt(ctx: SceneContext, playerCommand: string, recentH
     buildSectionB(ctx.vocabulary),
     buildSectionC(ctx),
     buildSectionD(recentHistory),
-    buildSectionE(playerCommand, ctx.locationExits ?? []),
+    buildSectionE(ctx, playerCommand, ctx.locationExits ?? []),
   ];
   return sections.join("\n\n");
 }
