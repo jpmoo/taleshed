@@ -21,7 +21,7 @@ export function initDatabase(dbPath?: string): Database.Database {
     fs.mkdirSync(dir, { recursive: true });
   }
   try {
-    var db = new Database(target);
+    var db = new Database(target, { timeout: 10000 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`TaleShed could not open database at ${target}: ${msg}`);

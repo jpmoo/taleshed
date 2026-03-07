@@ -110,6 +110,8 @@ Open **http://localhost:8043/?api=YOUR_KEY** (port defaults to MCP port + 1). Se
 
 Click a location to edit all fields in a modal; Save updates, Delete removes the node (with confirmation). Exits use JSON: `[{ "label", "target", "direction": "north"|"south"|"east"|"west" }]`. Use `grid_x` and `grid_y` to place locations on the grid.
 
+**Database sharing:** MCP server and authoring app use the same SQLite file. If you see *attempt to write a readonly database* or *database is locked* while using Claude with the authoring app open, close the authoring app (or stop the authoring server) when playing, or ensure the DB file and its directory are writable by the user running the MCP server. The engine uses a 10s busy timeout to wait for the other process to release the lock.
+
 ## Spec reference
 
 See `TaleShed_MCP_Spec_v0.1.pdf` in this repo for full data model, turn pipeline, Ollama prompt structure, and error handling.
