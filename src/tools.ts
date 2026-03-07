@@ -1,10 +1,18 @@
 /**
- * MCP tool handlers: take_turn, bookmark, restore_to_bookmark.
+ * MCP tool handlers: take_turn, bookmark, restore_to_bookmark, update_node_adjectives.
  */
 
 import type Database from "better-sqlite3";
 import { takeTurnWithRetry } from "./turn.js";
 import { createBookmark, restoreToBookmark } from "./bookmark.js";
+import {
+  getNode,
+  updateWorldGraphAdjectives,
+  getFullVocabulary,
+  insertVocabulary,
+  writeHistoryLedger,
+} from "./db/database.js";
+import { fetchAdjectiveDefinitions } from "./ollama.js";
 
 export interface TakeTurnArgs {
   player_command: string;
@@ -15,6 +23,80 @@ export interface TakeTurnOutput {
   result: "success" | "failure" | "partial" | "error";
   prose: string;
   error?: string;
+}
+
+export interface UpdateNodeAdjectivesArgs {
+  node_id: string;
+  adjectives: string[];
+}
+
+export interface UpdateNodeAdjectivesOutput {
+  success: boolean;
+  error?: string;
+}
+
+function parseAdjectives(val: string | undefined | null): string[] {
+  try {
+    if (typeof val === "string" && val.trim()) {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export async function handleUpdateNodeAdjectives(
+  db: Database.Database,
+  args: UpdateNodeAdjectivesArgs
+): Promise<UpdateNodeAdjectivesOutput> {
+  const nodeId = (args.node_id ?? "").trim();
+  if (!nodeId) {
+    return { success: false, error: "node_id is required" };
+  }
+  const node = getNode(db, nodeId);
+  if (!node) {
+    return { success: false, error: `No active node with node_id "${nodeId}"` };
+  }
+  const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
+  const adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
+  const currentAdj = parseAdjectives(node.adjectives);
+  const newJson = JSON.stringify(adjectives);
+  const currentJson = JSON.stringify(currentAdj);
+  if (newJson === currentJson) {
+    return { success: true };
+  }
+  db.transaction(() => {
+    updateWorldGraphAdjectives(db, nodeId, newJson);
+    writeHistoryLedger(db, [
+      {
+        timestamp: new Date().toISOString(),
+        action_description: "narrator_adjective_sync",
+        node_id: nodeId,
+        prose_impact: null,
+        adjectives_old: currentJson,
+        adjectives_new: newJson,
+        system_event: null,
+      },
+    ]);
+  })();
+  const vocabulary = getFullVocabulary(db);
+  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
+  const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
+  if (missing.length > 0) {
+    const definitions = await fetchAdjectiveDefinitions(missing, vocabulary);
+    if (definitions.length > 0) {
+      db.transaction(() => {
+        for (const d of definitions) {
+          if (d.adjective) {
+            insertVocabulary(db, d.adjective, d.rule_description || "(No description)", 0);
+          }
+        }
+      })();
+    }
+  }
+  return { success: true };
 }
 
 export function handleTakeTurn(db: Database.Database, args: TakeTurnArgs): Promise<TakeTurnOutput> {

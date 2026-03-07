@@ -90,7 +90,7 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", "doorway north", or antechamber. Do not describe or mention any door or direction not in EXITS—e.g. if EXITS list only "west -> scriptorium", there is no north door; say only what exists. If the player goes through the door, they go to the destination in the EXITS list. Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
 - When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), goes back, returns, or goes to a named place (e.g. "go back to scriptorium", "go west"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to the destination's node_id (from EXITS: e.g. kitchen, scriptorium). Use the exact target node_id from EXITS (e.g. kitchen), not a phrase like "the kitchen" or "The Kitchen"—the engine only accepts node_ids that exist. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Compound commands (e.g. "take torch and go through door") require every part to be applied: do the take AND set the player's new_location_id to the exit target so the engine actually moves them. Otherwise the engine will not move the player.
 - In narrative_prose, you MUST also describe the exits. For each exit in EXITS FROM THIS LOCATION, tell the player the direction and where it goes (e.g. "To the east, a battered door leads to the kitchen") so they can say "go east" or "east" to move. Do not omit exits. Mention only the exits listed—no extra doors or directions.
-- You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn; if unchanged, set both to the same array. Never omit an entry or leave adjectives blank for a node that has adjectives.
+- You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn; if unchanged, set both to the same array. Never omit an entry or leave adjectives blank for a node that has adjectives. Keep narrative and state in sync: if your narrative_prose describes an NPC's disposition or attitude changing (e.g. "his guarded quality shifts", "something adjacent to warmth"), you MUST set that NPC's adjectives_new to reflect it (e.g. ["less guarded"]) so the engine state matches the story.
 - You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
@@ -109,7 +109,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
   return `VOCABULARY (adjectives and their rules):
 ${vocabJson}
 
-When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately. Return new_adjectives as [] (definitions are handled by a separate step).`;
+When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately.`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
@@ -159,7 +159,7 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
       : "";
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}
-CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine.
+CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine. If your narrative describes an NPC's demeanor or attitude shifting (e.g. less guarded, more receptive), set that NPC's adjectives_new to match (e.g. ["less guarded"]) so the engine state and the story stay in sync.
 
 Return ONLY this JSON structure:
 {
@@ -174,7 +174,6 @@ Return ONLY this JSON structure:
       "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id; omit only if no move>"
     }
   ],
-  "new_adjectives": [],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"
 }`;
 }
@@ -239,7 +238,6 @@ const REQUIRED_JSON_FIELDS = [
   "narrative_prose",
   "action_result",
   "node_impacts",
-  "new_adjectives",
   "reconciliation_notes",
 ] as const;
 
@@ -356,7 +354,7 @@ function parseJsonResponse(responseText: string): MistralResponse {
   if (!Array.isArray(nodeImpacts) || nodeImpacts.length === 0) {
     throw new Error("node_impacts must be a non-empty array");
   }
-  const rawNewAdjs = parsed.new_adjectives;
+  const rawNewAdjs = (parsed as Record<string, unknown>).new_adjectives;
   const new_adjectives: MistralNewAdjective[] = Array.isArray(rawNewAdjs)
     ? rawNewAdjs
         .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")

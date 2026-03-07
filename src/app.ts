@@ -6,7 +6,12 @@
 import { McpServer } from "./sdk-shim.js";
 import type Database from "better-sqlite3";
 import { z } from "zod";
-import { handleTakeTurn, handleBookmark, handleRestoreToBookmark } from "./tools.js";
+import {
+  handleTakeTurn,
+  handleBookmark,
+  handleRestoreToBookmark,
+  handleUpdateNodeAdjectives,
+} from "./tools.js";
 
 const MAX_SUGGESTED_HISTORY_CHARS = 2800;
 
@@ -96,6 +101,31 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     },
     async () => {
       const out = handleRestoreToBookmark(db);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "update_node_adjectives",
+    {
+      title: "Update Node Adjectives",
+      description:
+        "When your narration implies a state or disposition change for an NPC or entity (e.g. Ciaran becomes less guarded, a room feels tense), call this to sync the engine so future turns see the updated state. Pass the node_id (e.g. 'ciaran') and the full list of adjectives that now describe that entity. New adjectives get definitions automatically. Use after presenting prose where you expanded with disposition or atmosphere changes.",
+      inputSchema: UpdateNodeAdjectivesSchema,
+    },
+    async (args: unknown) => {
+      const parsed = UpdateNodeAdjectivesSchema.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ success: false, error: parsed.error.message }),
+            },
+          ],
+        };
+      }
+      const out = await handleUpdateNodeAdjectives(db, parsed.data);
       return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
     }
   );
