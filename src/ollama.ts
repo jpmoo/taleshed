@@ -109,7 +109,7 @@ When writing narrative_prose:
 
 CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
 - Interpret the player's action literally. Do only the exact action(s) the player stated. Do not infer, assume, or add any action the player did not explicitly request.
-- "Take X" means only: add X to the player's inventory. It does NOT mean use X, light X, activate X, open X, or change X's state in any way. Example: if the player says "take torch", the torch is now in inventory and remains unlit (or whatever state it was in). Do not describe the torch as lit, burning, or casting light unless the player explicitly said to light it (e.g. "light the torch", "take torch and light it").
+- "Take X" means only: add X to the player's inventory. In node_impacts, the entry for the taken object (e.g. torch_01) MUST have new_location_id set to "player_inventory"—the engine moves the object by this field. Do NOT add an adjective to the object to indicate inventory (e.g. do not use "in player's inventory", "carried", or similar); use new_location_id only. It does NOT mean use X, light X, activate X, open X, or change X's state in any way. Example: if the player says "take torch", the torch's node_impact has new_location_id: "player_inventory" and adjectives_new unchanged; the torch remains unlit.
 - For any object: taking it does not imply using it. Using, lighting, activating, opening, or otherwise changing an object's state requires an explicit player command for that action. One verb = one action. "Take torch and go through door" = take (inventory) + move; the torch is still unlit unless the player also said to light it.
 - If the player's command has multiple parts (e.g. "take X and go through door"), perform exactly those parts and no others. Do not add a third action (e.g. lighting the torch) because it would be "helpful" or "realistic"—only the player can request that.
 
@@ -191,6 +191,7 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
       ? `\nMOVEMENT: If the player goes through a door/exit, says a direction ("east", "go west"), or says they go back/return to a place ("go back to scriptorium"), set the player's new_location_id to the exact target node_id from EXITS (e.g. "kitchen", "scriptorium"). Apply every part of a compound command. Without the player's new_location_id the engine will not move them.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
+TAKE: If the player takes an object, set that object's new_location_id to "player_inventory" in its node_impacts entry. Do not add adjectives to the object (e.g. "in player's inventory"); the engine uses new_location_id to move the object.
 Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch").
 ${exitLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. DO NOT change a node's adjectives unless the player's action directly involved that node and your narrative explicitly describes a change in that node's state. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node—no NPC becomes "less guarded" or "more friendly" just because the player entered or looked. Only change adjectives when the player did something to or with that node (e.g. talked to the NPC, used the object) and the narrative shows the change. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them.
@@ -205,7 +206,7 @@ Return ONLY this JSON structure:
       "prose_impact": "<string: what this node experienced>",
       "adjectives_old": ["<current adjectives for this node from CURRENT SCENE>"],
       "adjectives_new": ["<adjectives after this turn; same as adjectives_old if unchanged>"],
-      "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id; omit only if no move>"
+      "new_location_id": "<optional: for a TAKEN object set to \"player_inventory\" (required—engine moves object by this, not by adjectives); for player going through exit set to exit destination node_id; omit only if no move>"
     }
   ],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"
