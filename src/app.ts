@@ -45,7 +45,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Take Turn",
       description:
-        "The core game loop. Pass the player's command and, when available, recent_history (or suggested_recent_history from the previous response) so the engine can keep narration consistent. Returns result, prose for narration, and suggested_recent_history to pass back on the next call. Optional error if the tool failed.",
+        "The core game loop. Pass the player's command and, when available, recent_history (or suggested_recent_history from the previous response) so the engine can keep narration consistent. Returns result, prose for narration, and suggested_recent_history to pass back on the next call. Optional error if the tool failed. When presenting the engine's prose to the player: be verbose. Expand and narrate evocatively rather than quoting the prose briefly.",
       inputSchema: TakeTurnSchema,
     },
     async (args: unknown) => {
