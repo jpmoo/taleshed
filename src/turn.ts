@@ -319,10 +319,11 @@ export async function takeTurn(
       if (t) adjectivesInTurn.add(t);
     }
   }
-  const vocabLower = new Set(getFullVocabulary(db).map((v) => v.adjective.toLowerCase()));
+  const vocabulary = getFullVocabulary(db);
+  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
   const missing = [...adjectivesInTurn].filter((a) => !vocabLower.has(a.toLowerCase()));
   if (missing.length > 0) {
-    const definitions = await fetchAdjectiveDefinitions(missing);
+    const definitions = await fetchAdjectiveDefinitions(missing, vocabulary);
     if (definitions.length > 0) {
       db.transaction(() => {
         for (const d of definitions) {

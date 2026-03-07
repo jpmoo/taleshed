@@ -109,8 +109,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
   return `VOCABULARY (adjectives and their rules):
 ${vocabJson}
 
-When assigning adjectives to nodes, use existing vocabulary terms where possible.
-For every adjective you put in adjectives_new that is not already in VOCABULARY and not already in that node's adjectives_old, you MUST add an entry to new_adjectives with {"adjective": "<lowercase>", "rule_description": "<one sentence rule for this state>"}. Examples: if you set adjectives_new to ["less guarded"], ["lit"], or any new term, add that term to new_adjectives with a definition. new_adjectives may be [] only when no new adjective appears in any node's adjectives_new; otherwise include every new adjective you introduced.`;
+When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately. Return new_adjectives as [] (definitions are handled by a separate step).`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
@@ -161,7 +160,6 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine.
-Any adjective you put in adjectives_new that is not in VOCABULARY and not in that node's adjectives_old must have an entry in new_adjectives with a rule_description (e.g. "less guarded" → add {"adjective": "less guarded", "rule_description": "..."}).
 
 Return ONLY this JSON structure:
 {
@@ -176,9 +174,7 @@ Return ONLY this JSON structure:
       "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id; omit only if no move>"
     }
   ],
-  "new_adjectives": [
-    {"adjective": "<lowercase>", "rule_description": "<one sentence rule>"}
-  ],
+  "new_adjectives": [],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"
 }`;
 }
@@ -279,19 +275,28 @@ function extractJsonArrayString(raw: string): string {
 
 /**
  * Second call: fetch definitions for adjectives that appeared in the turn but are not in vocabulary.
+ * Uses existing vocabulary so new terms can be defined in relation to them (e.g. "less guarded" given "guarded").
+ * Definitions must be generic and transportable (apply to any node: location, object, NPC).
  * Returns array of { adjective, rule_description }; on parse failure or error returns [] so the turn is not broken.
  */
 export async function fetchAdjectiveDefinitions(
-  adjectives: string[]
+  adjectives: string[],
+  existingVocabulary: { adjective: string; rule_description: string }[]
 ): Promise<{ adjective: string; rule_description: string }[]> {
   if (adjectives.length === 0) return [];
   const terms = [...new Set(adjectives)].map((a) => a.trim()).filter(Boolean);
   if (terms.length === 0) return [];
-  const prompt = `You are defining game-state adjectives for a text adventure. For each term below, provide exactly one sentence describing what this state means for the game (how it affects the world or the character). Return ONLY a JSON array of objects with keys "adjective" (lowercase) and "rule_description". No other text.
+  const vocabBlock =
+    existingVocabulary.length > 0
+      ? `EXISTING VOCABULARY (use these to define new terms in relation when appropriate, e.g. "less guarded" from "guarded"):\n${existingVocabulary.map((v) => `- ${v.adjective}: ${v.rule_description}`).join("\n")}\n\n`
+      : "";
+  const prompt = `You are defining game-state adjectives for a text adventure. These definitions are generic and transportable: they apply to any node (location, object, NPC). Do not refer to specific characters, places, or objects.
 
-Terms: ${terms.join(", ")}
+${vocabBlock}Define each NEW term below. For each, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that. Return ONLY a JSON array of objects with keys "adjective" (lowercase) and "rule_description". No other text.
 
-Example format: [{"adjective": "lit", "rule_description": "Provides light in dark locations."}]`;
+NEW TERMS TO DEFINE: ${terms.join(", ")}
+
+Example format: [{"adjective": "less guarded", "rule_description": "NPC is somewhat cautious but more open than fully guarded; may share limited information."}]`;
   try {
     const responseText = await callOllama(prompt, "vocabulary definitions");
     const jsonStr = extractJsonArrayString(responseText);
