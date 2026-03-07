@@ -14,12 +14,6 @@
   </header>
   <main class="main-content">
     <div id="panel-world-graph" class="panel active">
-      <div class="world-graph-toolbar">
-        <label class="world-graph-option">
-          <input type="checkbox" id="show-locations" />
-          Show location nodes
-        </label>
-      </div>
       <div id="grid-wrap" class="grid-wrap locations-hidden">
         <div id="grid-content" class="grid-content">
           <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
@@ -50,8 +44,12 @@
       </div>
     </div>
     <div id="panel-nodes" class="panel">
-      <div class="list-toolbar">
+      <div class="list-toolbar list-toolbar-with-option">
         <button type="button" class="btn btn-add" id="nodes-add">Add node</button>
+        <label class="toolbar-option">
+          <input type="checkbox" id="show-locations" />
+          Show location nodes
+        </label>
       </div>
       <div class="list-wrap">
         <table class="data-table" id="nodes-table">

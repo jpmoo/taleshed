@@ -23,13 +23,16 @@ body {
   background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .main-content {
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: auto;
 }
 .panel {
   display: none;
@@ -46,6 +49,7 @@ body {
   min-height: 200px;
 }
 .bottom-nav {
+  flex-shrink: 0;
   display: flex;
   gap: 0;
   padding: 0;
@@ -149,19 +153,20 @@ body {
 .api-warn code { background: rgba(0,0,0,0.06); padding: 0.1em 0.3em; border-radius: 2px; }
 .api-warn.hidden { display: none; }
 
-.world-graph-toolbar {
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--grid);
-  background: #f8f6f0;
+.list-toolbar-with-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
-.world-graph-option {
+.toolbar-option {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.9rem;
   cursor: pointer;
 }
-.world-graph-option input { width: auto; }
+.toolbar-option input { width: auto; }
 .grid-wrap.locations-hidden .location-box { display: none; }
 .grid-wrap {
   position: relative;
