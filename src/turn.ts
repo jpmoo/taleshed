@@ -329,6 +329,7 @@ export async function takeTurn(
         for (const d of definitions) {
           if (d.adjective) {
             insertVocabulary(db, d.adjective, d.rule_description || "(No description)", 0);
+            console.warn(`[TaleShed] Vocabulary: inserted "${d.adjective}"`);
           }
         }
       })();

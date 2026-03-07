@@ -262,15 +262,26 @@ function extractJsonString(raw: string): string {
   return trimmed;
 }
 
-/** Extract a JSON array from model output (code block or raw [...]). */
-function extractJsonArrayString(raw: string): string {
+/** Extract a JSON array from model output (code block or raw [...]). Returns null if no array found. */
+function extractJsonArrayString(raw: string): string | null {
   const trimmed = raw.trim();
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
   const inner = codeBlockMatch ? codeBlockMatch[1].trim() : trimmed;
   const start = inner.indexOf("[");
   const end = inner.lastIndexOf("]") + 1;
   if (start >= 0 && end > start) return inner.slice(start, end);
-  return "[]";
+  return null;
+}
+
+/** Extract a single JSON object from model output (first { to last }). Returns null if none. */
+function extractSingleJsonObjectString(raw: string): string | null {
+  const trimmed = raw.trim();
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  const inner = codeBlockMatch ? codeBlockMatch[1].trim() : trimmed;
+  const start = inner.indexOf("{");
+  const end = inner.lastIndexOf("}") + 1;
+  if (start >= 0 && end > start) return inner.slice(start, end);
+  return null;
 }
 
 /**
@@ -292,18 +303,31 @@ export async function fetchAdjectiveDefinitions(
       : "";
   const prompt = `You are defining game-state adjectives for a text adventure. These definitions are generic and transportable: they apply to any node (location, object, NPC). Do not refer to specific characters, places, or objects.
 
-${vocabBlock}Define each NEW term below. For each, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that. Return ONLY a JSON array of objects with keys "adjective" (lowercase) and "rule_description". No other text.
+${vocabBlock}Define each NEW term below. For each term, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that. Return ONLY a JSON array with one object per term. No other text.
 
 NEW TERMS TO DEFINE: ${terms.join(", ")}
 
-Example format: [{"adjective": "less guarded", "rule_description": "NPC is somewhat cautious but more open than fully guarded; may share limited information."}]`;
+Return a JSON array. Example for two terms: [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "less guarded", "rule_description": "NPC is somewhat cautious but more open than fully guarded; may share limited information."}]`;
   try {
     const responseText = await callOllama(prompt, "vocabulary definitions");
-    const jsonStr = extractJsonArrayString(responseText);
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+    let items: Record<string, unknown>[] = [];
+    const arrayStr = extractJsonArrayString(responseText);
+    if (arrayStr !== null) {
+      const parsed = JSON.parse(arrayStr);
+      if (Array.isArray(parsed)) {
+        items = parsed.filter((x): x is Record<string, unknown> => x != null && typeof x === "object");
+      }
+    }
+    if (items.length === 0) {
+      const objStr = extractSingleJsonObjectString(responseText);
+      if (objStr !== null) {
+        const single = JSON.parse(objStr) as Record<string, unknown>;
+        if (single != null && typeof single === "object" && typeof single.adjective === "string") {
+          items = [single];
+        }
+      }
+    }
+    return items
       .map((x) => ({
         adjective: typeof x.adjective === "string" ? String(x.adjective).trim().toLowerCase() : "",
         rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
