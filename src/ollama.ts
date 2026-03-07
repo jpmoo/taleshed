@@ -303,11 +303,13 @@ export async function fetchAdjectiveDefinitions(
       : "";
   const prompt = `You are defining game-state adjectives for a text adventure. These definitions are generic and transportable: they apply to any node (location, object, NPC). Do not refer to specific characters, places, or objects.
 
-${vocabBlock}Define each NEW term below. For each term, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that. Return ONLY a JSON array with one object per term. No other text.
+${vocabBlock}Define each NEW term below. For each term, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that.
+
+CRITICAL: The "adjective" field in each object must be exactly one of the terms listed in NEW TERMS TO DEFINE—copy the term word-for-word. Do not substitute a synonym or different phrasing.
 
 NEW TERMS TO DEFINE: ${terms.join(", ")}
 
-Return a JSON array. Example for two terms: [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "less guarded", "rule_description": "NPC is somewhat cautious but more open than fully guarded; may share limited information."}]`;
+Return ONLY a JSON array with one object per term. No other text. Example format (use your actual terms, not these): [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "tense", "rule_description": "Atmosphere is charged with conflict or unease; NPCs may be quick to react."}]`;
   try {
     const responseText = await callOllama(prompt, logLabel);
     let items: Record<string, unknown>[] = [];
