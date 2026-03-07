@@ -346,12 +346,19 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
-      var cw = sw;
-      var ch = sh;
-      if (wrapW > 0 && wrapH > 0) {
-        cw = Math.max(wrapW, sw);
-        ch = Math.max(wrapH, sh);
+      if (wrapW <= 0 || wrapH <= 0) {
+        var panel = document.getElementById("panel-world-graph");
+        if (panel) {
+          wrapW = panel.clientWidth || 0;
+          wrapH = panel.clientHeight || 0;
+        }
+        if (wrapW <= 0 || wrapH <= 0) {
+          wrapW = document.documentElement.clientWidth || window.innerWidth || 800;
+          wrapH = document.documentElement.clientHeight || window.innerHeight || 600;
+        }
       }
+      var cw = Math.max(wrapW, sw);
+      var ch = Math.max(wrapH, sh);
       canvas.style.width = Math.max(1, cw) + "px";
       canvas.style.height = Math.max(1, ch) + "px";
     }
