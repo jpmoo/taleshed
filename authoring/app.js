@@ -97,8 +97,10 @@
 
   function render() {
     const wrap = document.getElementById("grid-wrap");
+    const content = document.getElementById("grid-content");
     const svg = document.getElementById("exit-lines");
     const layer = document.getElementById("locations-layer");
+    if (!content || !layer) return;
 
     const minX = Math.min(0, ...locations.map((l) => l.grid_x ?? 0));
     const minY = Math.min(0, ...locations.map((l) => l.grid_y ?? 0));
@@ -109,9 +111,9 @@
     const width = (maxX - minX + 1) * SLOT + BOX;
     const height = (maxY - minY + 1) * SLOT + BOX;
 
+    content.style.width = width + "px";
+    content.style.height = height + "px";
     layer.innerHTML = "";
-    layer.style.width = width + "px";
-    layer.style.height = height + "px";
 
     // Exit lines (2 blocks from edge of box)
     const pathParts = [];
@@ -270,7 +272,11 @@
     });
 
     wrap.addEventListener("dblclick", (e) => {
-      if (e.target.closest(".location-box")) return;
+      const box = e.target.closest(".location-box");
+      if (box && box.dataset.nodeId) {
+        openModal(box.dataset.nodeId);
+        return;
+      }
       const { gx, gy } = eventToSlot(wrap, e.clientX, e.clientY);
       const nodeId = "room_" + gx + "_" + gy;
       const body = {
