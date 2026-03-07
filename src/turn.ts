@@ -266,20 +266,10 @@ export async function takeTurn(
           console.warn(`[TaleShed] Mistral returned node_id not in world_graph: ${node_id}, skipping`);
           continue;
         }
-        const oldJson = JSON.stringify(entry.adjectives_old);
+        const currentAdj = safeParseAdjectives(node.adjectives);
         const newJson = JSON.stringify(entry.adjectives_new);
-        if (oldJson !== newJson) {
-          const currentAdj = safeParseAdjectives(node.adjectives);
-          const modelReturnedEmpty = entry.adjectives_new.length === 0;
-          const nodeHadAdjectives = currentAdj.length > 0;
-          const modelExplicitlyCleared =
-            modelReturnedEmpty &&
-            nodeHadAdjectives &&
-            entry.adjectives_old.length > 0 &&
-            JSON.stringify(entry.adjectives_old) === JSON.stringify(currentAdj);
-          if (modelReturnedEmpty && nodeHadAdjectives && !modelExplicitlyCleared) {
-            continue;
-          }
+        const currentJson = JSON.stringify(currentAdj);
+        if (newJson !== currentJson) {
           updateWorldGraphAdjectives(db, node_id, newJson);
         }
         if (entry.new_location_id != null) {

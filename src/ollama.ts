@@ -90,6 +90,7 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", or antechamber. If the player goes through the door, they go to the destination in the EXITS list (e.g. battered door -> kitchen). Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
 - When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's target. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Otherwise the engine will not move the player.
 - In narrative_prose, when describing the current location, tell the player the direction of each exit (e.g. "To the east, a battered door leads to the kitchen") so they can say "go east" or "east" to move.
+- You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn; if unchanged, set both to the same array. Never omit an entry or leave adjectives blank for a node that has adjectives.
 - You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
 PLAYER INVENTORY IS EXHAUSTIVE: The player has only the items listed in Inventory. Do not have them produce, pull from a belt, or use flint and steel, keys, or any tool not in that list. If Inventory is [], the player has nothing.
@@ -158,17 +159,19 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
       : "";
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}
+CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set both to the same array (e.g. scriptorium stays ["dark"] → adjectives_old: ["dark"], adjectives_new: ["dark"]). Never leave adjectives_old or adjectives_new as [] for a node that currently has adjectives unless you are explicitly removing them (then adjectives_old = current, adjectives_new = []).
+
 Return ONLY this JSON structure:
 {
   "narrative_prose": "<string: prose description of what happened, for Claude to use>",
   "action_result": "<success | failure | partial>",
   "node_impacts": [
     {
-      "node_id": "<string>",
+      "node_id": "<string: location node_id, or entity node_id, or \"player\">",
       "prose_impact": "<string: what this node experienced>",
-      "adjectives_old": ["<string>"],
-      "adjectives_new": ["<string>"],
-      "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id (e.g. \"kitchen\"); omit only if no move>"
+      "adjectives_old": ["<current adjectives for this node from CURRENT SCENE>"],
+      "adjectives_new": ["<adjectives after this turn; same as adjectives_old if unchanged>"],
+      "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id; omit only if no move>"
     }
   ],
   "new_adjectives": [
