@@ -19,7 +19,6 @@ const STARTER_VOCABULARY: [string, string][] = [
   ["locked", "Blocks passage or interaction. Requires a key, tool, or specific action to remove."],
   ["broken", "Object cannot perform its primary function. May still be used as raw material or weapon."],
   ["lit", "Object is actively burning or glowing. Provides light in dark locations."],
-  ["waterlogged", "Cannot be lit. Dries slowly over time or with deliberate effort."],
   ["guarded", "NPC is cautious with strangers. Requires trust-building before sharing information or assistance."],
   ["hostile", "NPC will not cooperate and may attack if approached. Requires significant intervention to change."],
   ["sacred", "Location or object carries religious or spiritual significance. Disrespectful actions may have consequences."],
