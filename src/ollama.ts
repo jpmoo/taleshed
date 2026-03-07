@@ -56,6 +56,13 @@ export interface SceneContext {
   locationExits: LocationExit[];
 }
 
+/** Destination scene when the player command is movement: location + entities + exits at the target. Used so narrative can describe arrival. */
+export interface DestinationScene {
+  location: SceneEntity;
+  entities: SceneEntity[];
+  exits: LocationExit[];
+}
+
 export interface MistralNodeImpact {
   node_id: string;
   prose_impact: string;
@@ -100,7 +107,7 @@ SCENERY (atmospheric detail not in ENTITIES PRESENT):
 
 CRITICAL — WHAT THE PLAYER CAN INTERACT WITH:
 - For actions that change world state (take, use, talk to, destroy, move): the player can only do these with (1) the current location, (2) entities listed in ENTITIES PRESENT (in the player's current location or inside a not-closed container there), or (3) items in the player's Inventory. People and objects in other locations are not present and cannot be seen, heard, or interacted with.
-- If the player tries to take, use, talk to, or otherwise change something (or someone) not in ENTITIES PRESENT and not in Inventory (e.g. "talk to Ciaran" or "take the scriptorium torch" while in the kitchen when Ciaran or that torch are not listed), the action fails. Say that the person or thing is not here; do not narrate the interaction, move the other character, or bring distant things into the scene.
+- If the player tries to take, use, talk to, or otherwise change something (or someone) not in ENTITIES PRESENT and not in Inventory (e.g. "talk to Ciaran" or "say hello to Ciaran" while in the kitchen when Ciaran is in the scriptorium and not listed in ENTITIES PRESENT), the action FAILS. You MUST return action_result "failure", narrative_prose that states the person or thing is not here (e.g. "Ciaran is not in this room. You are in the kitchen; he is in the scriptorium."). Do NOT narrate the interaction as if it happened. Do NOT add a node_impacts entry for the absent character or object — node_impacts must contain ONLY the location (current scene), each entity in ENTITIES PRESENT, and the player. The engine will ignore any node_id not in the current scene; never move or change someone in another location.
 
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. Only objects whose node_id is in the player's Inventory are carried or held by the player; objects listed in ENTITIES PRESENT but not in Inventory are in the location (the room), not in the player's hands. Do not describe the player as holding or carrying something unless it is in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
@@ -190,10 +197,36 @@ ${recentHistory || "(none)"}
 Check: does the recent narration describe anything inconsistent with the current world state above? If so, note corrections in your response.`;
 }
 
+function buildSectionDestination(dest: DestinationScene): string {
+  let out = `DESTINATION (the player is moving here — you MUST describe this in narrative_prose after they leave):
+Location: ${dest.location.node_id} — ${dest.location.name}
+Description: ${dest.location.base_description}
+Location adjectives: ${JSON.stringify(dest.location.adjectives ?? [])}
+`;
+  if (dest.entities.length > 0) {
+    out += `Entities present at destination (describe each in your narrative after the move):\n`;
+    for (const e of dest.entities) {
+      const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
+      out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}\n`;
+    }
+  } else {
+    out += `Entities present at destination: (none)\n`;
+  }
+  if (dest.exits.length > 0) {
+    out += `Exits from destination: ${dest.exits.map((e) => `${e.direction ?? "?"} -> ${e.target}`).join("; ")}\n`;
+  } else {
+    out += `Exits from destination: (none)\n`;
+  }
+  out += `
+When the player's action is movement, your narrative_prose MUST: (1) briefly describe leaving the current location; (2) describe the destination as the player sees it on arrival — the location name and description, every entity listed above, and every exit. Do not end with the player merely exiting; continue into the new room and describe what they see (as if the player had also said "look").`;
+  return out;
+}
+
 function buildSectionE(
   ctx: SceneContext,
   playerCommand: string,
-  locationExits: { label: string; target: string; direction?: string }[]
+  locationExits: { label: string; target: string; direction?: string }[],
+  destinationScene?: DestinationScene | null
 ): string {
   const loc = ctx.location;
   const containedBy = new Map<string, string[]>();
@@ -215,12 +248,16 @@ function buildSectionE(
     locationExits.length > 0
       ? `\nMOVEMENT (required when player moves): If the player's action is to go through the door, go through door, leave, or use a direction ("east", "go west", etc.), you MUST set the player's new_location_id to that exit's target node_id in the player's node_impacts entry. Example: one exit "east -> kitchen" and player says "go through door" → set player new_location_id to "kitchen". Without this field the engine does not move the player. Exits here: ${locationExits.map((e) => `${e.direction ?? "?"} -> ${e.target}`).join("; ")}.\n`
       : "";
+  const destinationLine =
+    destinationScene != null
+      ? `\n${buildSectionDestination(destinationScene)}\n`
+      : "";
   return `PLAYER ACTION: ${playerCommand}
 START/BEGIN: If the player said "start" or "begin", only describe the scene. Do NOT have the player take, use, or move any object. Do NOT set new_location_id for any object. No state changes.
 ${containmentLine}TAKE: If the player takes an object, set that object's new_location_id to the player's node_id (e.g. "player") in its node_impacts entry. Do not add adjectives to the object (e.g. "in player's inventory"); the engine uses new_location_id to move the object. The player's own new_location_id is only for movement—set it only to a location node_id from EXITS (e.g. kitchen), never to an object (e.g. torch_01). The object moves to the player; the player stays in a location.
 Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch"). Never have objects change state on their own: no torch lighting by itself, no "it catches", "of its own accord", or "by the logic of this world"—only an explicit player action (e.g. "light the torch") can change an object's state.
-${exitLine}
-CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. DO NOT change a node's adjectives unless the player's action directly involved that node and your narrative explicitly describes a change in that node's state. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node—no NPC becomes "less guarded" or "more friendly" just because the player entered or looked. Only change adjectives when the player did something to or with that node (e.g. talked to the NPC, used the object) and the narrative shows the change. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them.
+${exitLine}${destinationLine}
+CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player — and NO OTHER node_ids. If the player tried to interact with someone or something not in ENTITIES PRESENT and not in Inventory (e.g. "say hello to Ciaran" while in the kitchen and Ciaran is not listed), the action fails: return action_result "failure", say in narrative_prose that they are not here, and include in node_impacts ONLY the location, ENTITIES PRESENT, and player — never add an entry for a character or object in another location. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. DO NOT change a node's adjectives unless the player's action directly involved that node and your narrative explicitly describes a change in that node's state. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node—no NPC becomes "less guarded" or "more friendly" just because the player entered or looked. Only change adjectives when the player did something to or with that node (e.g. talked to the NPC, used the object) and the narrative shows the change. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them.
 
 Return ONLY this JSON structure:
 {
@@ -239,13 +276,18 @@ Return ONLY this JSON structure:
 }`;
 }
 
-export function assemblePrompt(ctx: SceneContext, playerCommand: string, recentHistory: string): string {
+export function assemblePrompt(
+  ctx: SceneContext,
+  playerCommand: string,
+  recentHistory: string,
+  destinationScene?: DestinationScene | null
+): string {
   const sections = [
     buildSectionA(),
     buildSectionB(ctx.vocabulary),
     buildSectionC(ctx),
     buildSectionD(recentHistory),
-    buildSectionE(ctx, playerCommand, ctx.locationExits ?? []),
+    buildSectionE(ctx, playerCommand, ctx.locationExits ?? [], destinationScene),
   ];
   return sections.join("\n\n");
 }
@@ -566,9 +608,10 @@ function proseFallback(ctx: SceneContext, responseText: string): MistralResponse
 export async function runMistralTurn(
   ctx: SceneContext,
   playerCommand: string,
-  recentHistory: string
+  recentHistory: string,
+  destinationScene?: DestinationScene | null
 ): Promise<MistralResponse> {
-  const prompt = assemblePrompt(ctx, playerCommand, recentHistory);
+  const prompt = assemblePrompt(ctx, playerCommand, recentHistory, destinationScene);
   const responseText = await callOllama(prompt, "turn");
   try {
     return parseJsonResponse(responseText);

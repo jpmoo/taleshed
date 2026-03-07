@@ -27,6 +27,7 @@ import {
   debugLog,
   type SceneContext,
   type SceneEntity,
+  type DestinationScene,
   type MistralResponse,
   type VocabularyItem,
 } from "./ollama.js";
@@ -66,6 +67,60 @@ function safeParseExits(val: string | undefined | null): { label: string; target
   } catch {
     return [];
   }
+}
+
+/** If the player command is a movement (go through door, east, leave, etc.), return the exit target node_id; otherwise null. */
+function resolveMovementTarget(
+  playerCommand: string,
+  locationExits: { target: string; direction?: string }[]
+): string | null {
+  if (locationExits.length === 0) return null;
+  const cmd = playerCommand.trim().toLowerCase();
+  const dirs = ["north", "south", "east", "west"] as const;
+  for (const d of dirs) {
+    if (cmd === d || cmd === "go " + d) {
+      const ex = locationExits.find((e) => (e.direction ?? "").toLowerCase() === d);
+      return ex ? ex.target : null;
+    }
+  }
+  const generic = ["go through the door", "through the door", "leave", "go out", "exit"];
+  if (generic.some((g) => cmd === g || cmd.startsWith(g + " "))) {
+    return locationExits[0].target;
+  }
+  if (cmd === "go" && locationExits.length === 1) return locationExits[0].target;
+  return null;
+}
+
+/** Build destination scene (location + entities + exits) for a location so the prompt can describe arrival. */
+function assembleDestinationScene(db: Database.Database, locationId: string): DestinationScene | null {
+  const location = getNode(db, locationId);
+  if (!location || location.node_type !== "location") return null;
+  const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
+  const npcIdsInRoom = new Set(
+    inLocationRaw.filter((n) => n.node_type === "npc").map((n) => n.node_id)
+  );
+  const inLocation = inLocationRaw.filter((n) => {
+    if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
+    return true;
+  });
+  const entityOrder: Record<string, number> = { location: 0, npc: 1, object: 2, player: 3 };
+  const rawEntities: SceneEntity[] = inLocation.map((node) => {
+    const recent = getRecentHistoryForNode(db, node.node_id, 3)
+      .map((h) => sanitizeProseForPrompt(h.prose_impact))
+      .filter(Boolean);
+    return toSceneEntity(node, recent);
+  });
+  const entities = rawEntities.sort(
+    (a, b) =>
+      (entityOrder[a.node_type] ?? 2) - (entityOrder[b.node_type] ?? 2) ||
+      a.node_id.localeCompare(b.node_id)
+  );
+  const locationRecent = getRecentHistoryForNode(db, location.node_id, 3)
+    .map((h) => sanitizeProseForPrompt(h.prose_impact))
+    .filter(Boolean);
+  const locationEntity = toSceneEntity(location, locationRecent);
+  const exits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+  return { location: locationEntity, entities, exits };
 }
 
 /** Prose that looks like JSON or is too long must not be written to the ledger (would pollute future prompts). */
@@ -215,6 +270,10 @@ export async function takeTurn(
     };
   }
 
+  const destTarget = resolveMovementTarget(playerCommand, ctx.locationExits ?? []);
+  const destinationScene =
+    destTarget != null ? assembleDestinationScene(db, destTarget) : null;
+
   const reachable = await checkOllamaReachable();
   if (!reachable) {
     return { result: "error", prose: OLLAMA_UNREACHABLE_PROSE, error: "Ollama unreachable" };
@@ -222,7 +281,12 @@ export async function takeTurn(
 
   let mistralResponse: MistralResponse;
   try {
-    mistralResponse = await runMistralTurn(ctx, playerCommand, recentHistory ?? "");
+    mistralResponse = await runMistralTurn(
+      ctx,
+      playerCommand,
+      recentHistory ?? "",
+      destinationScene ?? undefined
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("timeout") || message.includes("unreachable")) {
@@ -240,10 +304,12 @@ export async function takeTurn(
   for (const e of ctx.entities) sceneNodeIds.add(e.node_id);
   sceneNodeIds.add("player");
 
+  /* Only apply impacts for nodes that were in the current scene. Ignore model output for nodes in other locations (e.g. "talk to Ciaran" in kitchen must not update Ciaran). */
+  const sceneImpactsOnly = mistralResponse.node_impacts.filter((i) => sceneNodeIds.has(i.node_id));
   const actionDescription = normalizeActionDescription(playerCommand);
   const now = new Date().toISOString();
   const impactByNode = new Map(
-    mistralResponse.node_impacts.map((i) => {
+    sceneImpactsOnly.map((i) => {
       const adjOld = safeParseAdjectives(i.adjectives_old).filter(isValidAdjectiveToken);
       const adjNew = safeParseAdjectives(i.adjectives_new).filter(isValidAdjectiveToken);
       return [

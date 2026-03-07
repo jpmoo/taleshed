@@ -302,6 +302,13 @@
     wrap.scrollTop = maxScrollTop * 0.5;
   }
 
+  function centerMapScrollAfterLayout() {
+    centerMapScroll();
+    requestAnimationFrame(function () {
+      centerMapScroll();
+    });
+  }
+
   function applyZoom() {
     const wrapper = document.getElementById("grid-zoom-wrapper");
     const content = document.getElementById("grid-content");
@@ -323,7 +330,7 @@
     if (next === zoomPercent && !options) return;
     zoomPercent = next;
     applyZoom();
-    if (options && options.center !== false) centerMapScroll();
+    if (options && options.center !== false) centerMapScrollAfterLayout();
   }
 
   function render() {
@@ -407,7 +414,7 @@
       layer.appendChild(box);
     });
     applyZoom();
-    centerMapScroll();
+    centerMapScrollAfterLayout();
   }
 
   function setupPanAndDrag() {
