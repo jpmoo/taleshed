@@ -110,7 +110,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
 ${vocabJson}
 
 When assigning adjectives to nodes, use existing vocabulary terms where possible.
-When the player's action causes a new state that has no existing vocabulary term, you MUST add it to new_adjectives so the engine can track it (e.g. something becomes lit, broken, open, wet, locked, extinguished — add {"adjective": "<word>", "rule_description": "<brief rule>"} for each such new term). new_adjectives may be [] only when nothing new is introduced; otherwise include every new state word you use in node_impacts.`;
+For every adjective you put in adjectives_new that is not already in VOCABULARY and not already in that node's adjectives_old, you MUST add an entry to new_adjectives with {"adjective": "<lowercase>", "rule_description": "<one sentence rule for this state>"}. Examples: if you set adjectives_new to ["less guarded"], ["lit"], or any new term, add that term to new_adjectives with a definition. new_adjectives may be [] only when no new adjective appears in any node's adjectives_new; otherwise include every new adjective you introduced.`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
@@ -161,6 +161,7 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine.
+Any adjective you put in adjectives_new that is not in VOCABULARY and not in that node's adjectives_old must have an entry in new_adjectives with a rule_description (e.g. "less guarded" → add {"adjective": "less guarded", "rule_description": "..."}).
 
 Return ONLY this JSON structure:
 {
@@ -176,7 +177,7 @@ Return ONLY this JSON structure:
     }
   ],
   "new_adjectives": [
-    {"adjective": "<lowercase word>", "rule_description": "<one sentence rule for this state>"}
+    {"adjective": "<lowercase>", "rule_description": "<one sentence rule>"}
   ],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"
 }`;
@@ -262,6 +263,50 @@ function extractJsonString(raw: string): string {
   const end = trimmed.lastIndexOf("}") + 1;
   if (start >= 0 && end > start) return trimmed.slice(start, end);
   return trimmed;
+}
+
+/** Extract a JSON array from model output (code block or raw [...]). */
+function extractJsonArrayString(raw: string): string {
+  const trimmed = raw.trim();
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  const inner = codeBlockMatch ? codeBlockMatch[1].trim() : trimmed;
+  const start = inner.indexOf("[");
+  const end = inner.lastIndexOf("]") + 1;
+  if (start >= 0 && end > start) return inner.slice(start, end);
+  return "[]";
+}
+
+/**
+ * Second call: fetch definitions for adjectives that appeared in the turn but are not in vocabulary.
+ * Returns array of { adjective, rule_description }; on parse failure or error returns [] so the turn is not broken.
+ */
+export async function fetchAdjectiveDefinitions(
+  adjectives: string[]
+): Promise<{ adjective: string; rule_description: string }[]> {
+  if (adjectives.length === 0) return [];
+  const terms = [...new Set(adjectives)].map((a) => a.trim()).filter(Boolean);
+  if (terms.length === 0) return [];
+  const prompt = `You are defining game-state adjectives for a text adventure. For each term below, provide exactly one sentence describing what this state means for the game (how it affects the world or the character). Return ONLY a JSON array of objects with keys "adjective" (lowercase) and "rule_description". No other text.
+
+Terms: ${terms.join(", ")}
+
+Example format: [{"adjective": "lit", "rule_description": "Provides light in dark locations."}]`;
+  try {
+    const responseText = await callOllama(prompt);
+    const jsonStr = extractJsonArrayString(responseText);
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+      .map((x) => ({
+        adjective: typeof x.adjective === "string" ? String(x.adjective).trim().toLowerCase() : "",
+        rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
+      }))
+      .filter((x) => x.adjective.length > 0);
+  } catch (err) {
+    if (DEBUG) debugLog("fetchAdjectiveDefinitions error", err instanceof Error ? err.message : String(err));
+    return [];
+  }
 }
 
 function parseJsonResponse(responseText: string): MistralResponse {

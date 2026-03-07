@@ -21,6 +21,7 @@ import type { WorldNode } from "./db/schema.js";
 import {
   runMistralTurn,
   checkOllamaReachable,
+  fetchAdjectiveDefinitions,
   type SceneContext,
   type SceneEntity,
   type MistralResponse,
@@ -309,6 +310,28 @@ export async function takeTurn(
       prose: "The world stutters. (Engine: A persistent error occurred. Please try again.)",
       error: message,
     };
+  }
+
+  const adjectivesInTurn = new Set<string>();
+  for (const [, entry] of impactByNode) {
+    for (const a of entry.adjectives_new) {
+      const t = String(a).trim();
+      if (t) adjectivesInTurn.add(t);
+    }
+  }
+  const vocabLower = new Set(getFullVocabulary(db).map((v) => v.adjective.toLowerCase()));
+  const missing = [...adjectivesInTurn].filter((a) => !vocabLower.has(a.toLowerCase()));
+  if (missing.length > 0) {
+    const definitions = await fetchAdjectiveDefinitions(missing);
+    if (definitions.length > 0) {
+      db.transaction(() => {
+        for (const d of definitions) {
+          if (d.adjective) {
+            insertVocabulary(db, d.adjective, d.rule_description || "(No description)", 0);
+          }
+        }
+      })();
+    }
   }
 
   return {
