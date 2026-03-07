@@ -271,6 +271,14 @@ export async function takeTurn(
         const newJson = JSON.stringify(entry.adjectives_new);
         const currentJson = JSON.stringify(currentAdj);
         if (newJson !== currentJson) {
+          const modelReturnedEmpty = entry.adjectives_new.length === 0;
+          const nodeHadAdjectives = currentAdj.length > 0;
+          const modelAcknowledgedCurrent =
+            entry.adjectives_old.length > 0 &&
+            JSON.stringify(entry.adjectives_old) === currentJson;
+          if (modelReturnedEmpty && nodeHadAdjectives && !modelAcknowledgedCurrent) {
+            continue;
+          }
           updateWorldGraphAdjectives(db, node_id, newJson);
         }
         if (entry.new_location_id != null) {

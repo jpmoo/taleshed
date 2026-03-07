@@ -160,7 +160,7 @@ function buildSectionE(playerCommand: string, locationExits: { label: string; ta
       : "";
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}
-CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set both to the same array (e.g. scriptorium stays ["dark"] → adjectives_old: ["dark"], adjectives_new: ["dark"]). Never leave adjectives_old or adjectives_new as [] for a node that currently has adjectives unless you are explicitly removing them (then adjectives_old = current, adjectives_new = []).
+CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array (e.g. ciaran has ["guarded"] and stays guarded → adjectives_old: ["guarded"], adjectives_new: ["guarded"]). Never use [] for a node that currently has adjectives unless you are explicitly clearing them (then adjectives_old = current, adjectives_new = []). Empty [] when the node has adjectives will be ignored by the engine.
 
 Return ONLY this JSON structure:
 {
@@ -281,7 +281,17 @@ function parseJsonResponse(responseText: string): MistralResponse {
   if (!Array.isArray(nodeImpacts) || nodeImpacts.length === 0) {
     throw new Error("node_impacts must be a non-empty array");
   }
-  return parsed as unknown as MistralResponse;
+  const rawNewAdjs = parsed.new_adjectives;
+  const new_adjectives: MistralNewAdjective[] = Array.isArray(rawNewAdjs)
+    ? rawNewAdjs
+        .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+        .map((x) => ({
+          adjective: typeof x.adjective === "string" ? String(x.adjective).trim() : "",
+          rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
+        }))
+        .filter((x) => x.adjective.length > 0)
+    : [];
+  return { ...parsed, new_adjectives } as unknown as MistralResponse;
 }
 
 /** When the model returns plain prose instead of JSON, coerce it into a valid response so the game continues. */
