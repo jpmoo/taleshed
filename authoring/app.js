@@ -30,7 +30,6 @@
   let minGridY = 0;
   let skipNextClick = false;
   let panState = null;
-  let dragState = null;
 
   function showApiMessage(message) {
     var warn = document.getElementById("api-warn");
@@ -62,11 +61,7 @@
       .then((rows) => {
         allNodes = rows;
         locations = rows.filter((n) => n.node_type === "location");
-        // Default grid position for locations without one
-        locations.forEach((loc, i) => {
-          if (loc.grid_x == null && loc.grid_x !== 0) loc.grid_x = i;
-          if (loc.grid_y == null && loc.grid_y !== 0) loc.grid_y = 0;
-        });
+        computeLayoutFromExits();
         render();
         var nodesPanel = document.getElementById("panel-nodes");
         if (nodesPanel && nodesPanel.classList.contains("active")) renderNodes();
@@ -83,6 +78,49 @@
       return Array.isArray(arr) ? arr : [];
     } catch {
       return [];
+    }
+  }
+
+  /** Assign grid_x, grid_y to locations from exit graph. Root at (0,0); neighbors placed by direction (north=above, east=right, etc.). */
+  function computeLayoutFromExits() {
+    const locById = new Map(locations.map((l) => [l.node_id, l]));
+    const pos = new Map();
+    const queue = [];
+    const first = locations[0];
+    if (!first) return;
+    pos.set(first.node_id, { x: 0, y: 0 });
+    queue.push(first.node_id);
+    while (queue.length) {
+      const nodeId = queue.shift();
+      const loc = locById.get(nodeId);
+      if (!loc) continue;
+      const p = pos.get(nodeId);
+      const exits = parseExits(loc.exits);
+      for (const e of exits) {
+        const targetId = (e.target || "").trim();
+        if (!targetId || !locById.has(targetId)) continue;
+        if (pos.has(targetId)) continue;
+        const dir = (e.direction || "").toLowerCase();
+        let dx = 0, dy = 0;
+        if (dir === "north") dy = -1;
+        else if (dir === "south") dy = 1;
+        else if (dir === "east") dx = 1;
+        else if (dir === "west") dx = -1;
+        else continue;
+        pos.set(targetId, { x: p.x + dx, y: p.y + dy });
+        queue.push(targetId);
+      }
+    }
+    let fallbackX = 0;
+    for (const loc of locations) {
+      const p = pos.get(loc.node_id);
+      if (p != null) {
+        loc.grid_x = p.x;
+        loc.grid_y = p.y;
+      } else {
+        loc.grid_x = fallbackX++;
+        loc.grid_y = 1;
+      }
     }
   }
 
@@ -183,49 +221,10 @@
       if (panState) {
         wrap.scrollLeft = panState.startScrollLeft + (panState.startX - e.clientX);
         wrap.scrollTop = panState.startScrollTop + (panState.startY - e.clientY);
-      } else if (dragState) {
-        const dx = e.clientX - dragState.startX;
-        const dy = e.clientY - dragState.startY;
-        const dgx = Math.round(dx / SLOT);
-        const dgy = Math.round(dy / SLOT);
-        const loc = locations.find((l) => l.node_id === dragState.nodeId);
-        if (loc) {
-          loc.grid_x = dragState.startGx + dgx;
-          loc.grid_y = dragState.startGy + dgy;
-          render();
-        }
       }
     }
 
     function onUp() {
-      if (dragState) {
-        const loc = allNodes.find((n) => n.node_id === dragState.nodeId);
-        if (loc) {
-          const payload = {
-            node_type: loc.node_type,
-            name: loc.name,
-            base_description: loc.base_description ?? "",
-            adjectives: typeof loc.adjectives === "string" ? loc.adjectives : JSON.stringify(loc.adjectives ?? []),
-            location_id: loc.location_id ?? null,
-            is_active: loc.is_active != null ? loc.is_active : 1,
-            meta: loc.meta ?? null,
-            grid_x: loc.grid_x,
-            grid_y: loc.grid_y,
-            exits: typeof loc.exits === "string" ? loc.exits : JSON.stringify(loc.exits ?? []),
-          };
-          fetch(apiUrl("/api/world-graph/" + encodeURIComponent(dragState.nodeId)), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-            .then((r) => {
-              if (r.ok) fetchGraph();
-            })
-            .catch(() => {});
-          skipNextClick = true;
-        }
-        dragState = null;
-      }
       panState = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
@@ -236,34 +235,21 @@
     wrap.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       const onBox = e.target.closest(".location-box");
-      if (onBox) {
-        const nodeId = onBox.dataset.nodeId;
-        const loc = locations.find((l) => l.node_id === nodeId);
-        if (!loc) return;
-        dragState = {
-          nodeId,
-          startGx: loc.grid_x ?? 0,
-          startGy: loc.grid_y ?? 0,
-          startX: e.clientX,
-          startY: e.clientY,
-        };
-      } else {
-        panState = {
-          startScrollLeft: wrap.scrollLeft,
-          startScrollTop: wrap.scrollTop,
-          startX: e.clientX,
-          startY: e.clientY,
-        };
-      }
-      if (panState) document.body.style.cursor = "grabbing";
-      else if (dragState) document.body.style.cursor = "move";
+      if (onBox) return;
+      panState = {
+        startScrollLeft: wrap.scrollLeft,
+        startScrollTop: wrap.scrollTop,
+        startX: e.clientX,
+        startY: e.clientY,
+      };
+      document.body.style.cursor = "grabbing";
       document.body.style.userSelect = "none";
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     });
 
     wrap.addEventListener("mouseover", (e) => {
-      if (panState || dragState) return;
+      if (panState) return;
       if (e.target.closest(".location-box")) wrap.style.cursor = "pointer";
       else wrap.style.cursor = "grab";
     });
@@ -352,7 +338,7 @@
 
   // --- Panel switching ---
   const SUBTITLES = {
-    "panel-world-graph": "Double-click empty space to add a room; drag rooms to move (exits stay connected); drag empty space to pan.",
+    "panel-world-graph": "Rooms are arranged by connections (exits). Double-click empty space to add a room; drag empty space to pan; click a room to edit.",
     "panel-history": "History ledger entries. Edit, add, or delete (with confirmation).",
     "panel-vocabulary": "Vocabulary terms. Edit, add, or delete (with confirmation).",
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",

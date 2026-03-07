@@ -256,8 +256,12 @@ export async function takeTurn(
           const currentAdj = safeParseAdjectives(node.adjectives);
           const modelReturnedEmpty = entry.adjectives_new.length === 0;
           const nodeHadAdjectives = currentAdj.length > 0;
-          const modelAcknowledgedCurrent = entry.adjectives_old.length > 0;
-          if (modelReturnedEmpty && nodeHadAdjectives && !modelAcknowledgedCurrent) {
+          const modelExplicitlyCleared =
+            modelReturnedEmpty &&
+            nodeHadAdjectives &&
+            entry.adjectives_old.length > 0 &&
+            JSON.stringify(entry.adjectives_old) === JSON.stringify(currentAdj);
+          if (modelReturnedEmpty && nodeHadAdjectives && !modelExplicitlyCleared) {
             continue;
           }
           updateWorldGraphAdjectives(db, node_id, newJson);
