@@ -345,7 +345,12 @@ export async function takeTurn(
         }
         if (entry.new_location_id != null) {
           const raw = String(entry.new_location_id).trim();
-          const resolvedId = getNode(db, raw) ? raw : resolveLocationNodeId(db, raw);
+          const isPlayerInventory = raw.toLowerCase() === "player_inventory";
+          const resolvedId = isPlayerInventory
+            ? "player_inventory"
+            : getNode(db, raw)
+              ? raw
+              : resolveLocationNodeId(db, raw);
           if (!resolvedId) {
             console.warn(
               `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: no such location in world_graph (model may have invented a location).`
