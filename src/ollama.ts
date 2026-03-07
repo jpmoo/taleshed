@@ -422,12 +422,16 @@ Return ONLY a JSON array with one object per term. No other text. Example format
         rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
       }))
       .filter((x) => x.adjective.length > 0);
-    // If the model returned fewer definitions than terms, request the missing ones (one round of fallback; no recursion).
+    // If the model returned fewer definitions than terms, fetch each missing term in its own request (one term = one object, which models handle reliably).
     const definedLower = new Set(result.map((r) => r.adjective));
     const missing = terms.filter((t) => !definedLower.has(t.trim().toLowerCase()));
     if (allowFallback && missing.length > 0) {
-      if (DEBUG) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing: ${missing.join(", ")}`);
-      const extra = await fetchAdjectiveDefinitions(missing, existingVocabulary, callSource, false);
+      if (DEBUG) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing one-by-one: ${missing.join(", ")}`);
+      const extra: { adjective: string; rule_description: string }[] = [];
+      for (const term of missing) {
+        const one = await fetchAdjectiveDefinitions([term], existingVocabulary, callSource, false);
+        extra.push(...one);
+      }
       return [...result, ...extra];
     }
     return result;
