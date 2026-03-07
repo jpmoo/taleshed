@@ -527,10 +527,12 @@
     const checkbox = document.getElementById("show-locations");
     const gridWrap = document.getElementById("grid-wrap");
     if (checkbox && gridWrap) {
-      checkbox.addEventListener("change", function () {
-        if (this.checked) gridWrap.classList.remove("locations-hidden");
+      function applyShowLocations() {
+        if (checkbox.checked) gridWrap.classList.remove("locations-hidden");
         else gridWrap.classList.add("locations-hidden");
-      });
+      }
+      checkbox.addEventListener("change", applyShowLocations);
+      applyShowLocations();
     }
   })();
   fetchGraph();
