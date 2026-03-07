@@ -132,6 +132,8 @@ To have **one** systemd service start both the MCP server and the authoring web 
 
 If either the MCP server or the authoring server exits, the script exits and systemd will restart both (when `Restart=on-failure`).
 
+**If the service keeps restarting (exit code 1):** check logs with `journalctl -u taleshed -n 80 --no-pager`. The authoring server exits with code 1 if `TALESHED_WEB_API_KEY` is missing or empty in `.env` — add it and restart. If you see "node not found", set `Environment=NODE=/full/path/to/node` (or add Node to `PATH`) in the service file.
+
 ---
 
 ## Option C: Two separate services (MCP and authoring)
