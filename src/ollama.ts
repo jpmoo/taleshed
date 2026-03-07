@@ -188,7 +188,7 @@ Check: does the recent narration describe anything inconsistent with the current
 function buildSectionE(playerCommand: string, locationExits: { label: string; target: string; direction?: string }[]): string {
   const exitLine =
     locationExits.length > 0
-      ? `\nMOVEMENT: If the player goes through a door/exit, says a direction ("east", "go west"), or says they go back/return to a place ("go back to scriptorium"), set the player's new_location_id to the exact target node_id from EXITS (e.g. "kitchen", "scriptorium"). Apply every part of a compound command. Without the player's new_location_id the engine will not move them.\n`
+      ? `\nMOVEMENT (required when player moves): If the player's action is to go through the door, go through door, leave, or use a direction ("east", "go west", etc.), you MUST set the player's new_location_id to that exit's target node_id in the player's node_impacts entry. Example: one exit "east -> kitchen" and player says "go through door" → set player new_location_id to "kitchen". Without this field the engine does not move the player. Exits here: ${locationExits.map((e) => `${e.direction ?? "?"} -> ${e.target}`).join("; ")}.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
 TAKE: If the player takes an object, set that object's new_location_id to the player's node_id (e.g. "player") in its node_impacts entry. Do not add adjectives to the object (e.g. "in player's inventory"); the engine uses new_location_id to move the object. The player's own new_location_id is only for movement—set it only to a location node_id from EXITS (e.g. kitchen), never to an object (e.g. torch_01). The object moves to the player; the player stays in a location.
@@ -206,7 +206,7 @@ Return ONLY this JSON structure:
       "prose_impact": "<string: what this node experienced>",
       "adjectives_old": ["<current adjectives for this node from CURRENT SCENE>"],
       "adjectives_new": ["<adjectives after this turn; same as adjectives_old if unchanged>"],
-      "new_location_id": "<optional: for a TAKEN object set to the player node_id e.g. \"player\" (required—engine moves object by this, not by adjectives); for player going through exit set to exit destination node_id; omit only if no move>"
+      "new_location_id": "<optional: for a TAKEN object set to the player node_id e.g. \"player\"; for MOVEMENT (go through door, east, etc.) set the player entry's new_location_id to the exit target e.g. \"kitchen\"—required or the player will not move; omit only if no take and no move>"
     }
   ],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"

@@ -99,6 +99,14 @@ function safeParseAdjectives(val: string | unknown): string[] {
   }
 }
 
+/** Drop model slip-ups: JSON fragments or non-words (e.g. "[]", "[") are not adjectives. */
+function isValidAdjectiveToken(s: string): boolean {
+  const t = String(s).trim();
+  if (!t) return false;
+  if (t === "[]" || t === "[" || t === "]") return false;
+  return /[a-zA-Z]/.test(t);
+}
+
 function toSceneEntity(node: WorldNode, recentHistory: string[]): SceneEntity {
   const adjectives = safeParseAdjectives(node.adjectives);
   return {
@@ -235,18 +243,22 @@ export async function takeTurn(
   const actionDescription = normalizeActionDescription(playerCommand);
   const now = new Date().toISOString();
   const impactByNode = new Map(
-    mistralResponse.node_impacts.map((i) => [
-      i.node_id,
-      {
-        prose_impact: i.prose_impact ?? "No change.",
-        adjectives_old: safeParseAdjectives(i.adjectives_old),
-        adjectives_new: safeParseAdjectives(i.adjectives_new),
-        new_location_id:
-          i.new_location_id != null && String(i.new_location_id).trim() !== ""
-            ? String(i.new_location_id).trim()
-            : undefined,
-      },
-    ])
+    mistralResponse.node_impacts.map((i) => {
+      const adjOld = safeParseAdjectives(i.adjectives_old).filter(isValidAdjectiveToken);
+      const adjNew = safeParseAdjectives(i.adjectives_new).filter(isValidAdjectiveToken);
+      return [
+        i.node_id,
+        {
+          prose_impact: i.prose_impact ?? "No change.",
+          adjectives_old: adjOld,
+          adjectives_new: adjNew,
+          new_location_id:
+            i.new_location_id != null && String(i.new_location_id).trim() !== ""
+              ? String(i.new_location_id).trim()
+              : undefined,
+        },
+      ];
+    })
   );
 
   for (const nodeId of sceneNodeIds) {
