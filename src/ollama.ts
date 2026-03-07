@@ -96,7 +96,7 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
 When writing narrative_prose:
-- You MUST mention the location and every entity in ENTITIES PRESENT so the player knows what exists. Describe the location/room first, then each NPC by name, then each object—by name or a clear description (e.g. "a torch in a bracket", "The Torch on the wall") so the player knows they can take or interact with it. If you omit an object (e.g. the torch), the player will not know it is there. Never add people or objects not in the list; never omit a listed entity.
+- You MUST mention the location and every entity in ENTITIES PRESENT so the player knows what exists. Describe the location/room first, then each NPC by name, then each object. For each object in the list, mention the object itself (e.g. "the torch", "an unlit torch in the bracket") so the player can refer to it (e.g. "take torch"). Do not describe only a container or fixture (e.g. "an empty torch bracket") when the entity list includes that object—if The Torch is listed, say where the torch is or that it is there, not only the bracket. Never add people or objects not in the list; never omit a listed entity.
 - Do only what the user asked. Do not take extra actions on any item or object unless the user explicitly says to. If the user says "take X", only add X to inventory—do not also use it, light it, activate it, or otherwise change its state unless the user explicitly asks for that. If the user says "take X and go through door", do exactly those two things and nothing more.
 - An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
 - If the player tries to take or use something not in ENTITIES PRESENT, the action fails.`;
@@ -120,7 +120,7 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Your narrative_prose MUST mention each of these: the location and every entity below (each NPC by name, each object by name or clear description so the player knows it is there).
+ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it—not only a fixture like "empty bracket" when the object (e.g. The Torch) is in the list.
 `;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
