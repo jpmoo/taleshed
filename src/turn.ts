@@ -108,6 +108,7 @@ function toSceneEntity(node: WorldNode, recentHistory: string[]): SceneEntity {
     base_description: node.base_description,
     adjectives: Array.isArray(adjectives) ? adjectives : [],
     recent_history: recentHistory,
+    location_id: node.location_id ?? undefined,
   };
 }
 
