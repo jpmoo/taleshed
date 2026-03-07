@@ -188,13 +188,16 @@
     svg.setAttribute("height", height);
     svg.innerHTML = pathParts.join("");
 
+    const playerNode = allNodes.find((n) => n.node_id === "player");
+    const playerLocationId = (playerNode && playerNode.location_id) || null;
+
     locations.forEach((loc) => {
       const gx = loc.grid_x ?? 0;
       const gy = loc.grid_y ?? 0;
       const left = (gx - minX) * SLOT;
       const top = (gy - minY) * SLOT;
       const box = document.createElement("div");
-      box.className = "location-box";
+      box.className = "location-box" + (loc.node_id === playerLocationId ? " current-location" : "");
       box.textContent = loc.name || loc.node_id;
       box.style.left = left + "px";
       box.style.top = top + "px";

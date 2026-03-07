@@ -218,8 +218,16 @@ body {
   border-color: var(--accent);
   box-shadow: 2px 2px 8px rgba(0,0,0,0.18);
 }
+.location-box.current-location {
+  background: #c8e6c9;
+  border-color: #2e7d32;
+}
+.location-box.current-location:hover {
+  background: #a5d6a7;
+  border-color: #2e7d32;
+}
 .grid-wrap .location-box {
-  cursor: move;
+  cursor: pointer;
 }
 
 /* Modal */

@@ -41,6 +41,8 @@ export interface SceneEntity {
 export interface LocationExit {
   label: string;
   target: string;
+  /** Cardinal direction for this exit (north/south/east/west); used so the model can tell the player and match "go east" etc. */
+  direction?: string;
 }
 
 export interface SceneContext {
@@ -86,7 +88,8 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - Do not invent any object not in ENTITIES PRESENT. No poker, trapdoor, seam in the floor, or other props unless they appear in the list. If the kitchen (or any location) has no object entities listed, there are no takeable or notable objects there beyond what the location description states.
 - If the scene lists no exits, this location has no exits. Never describe or imply a door, corridor, or room that is not in the entity list.
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", or antechamber. If the player goes through the door, they go to the destination in the EXITS list (e.g. battered door -> kitchen). Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
-- When the player goes through an exit (e.g. "go through the door", "east", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's destination (the target from EXITS FROM THIS LOCATION). Otherwise the engine will not move the player.
+- When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's target. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Otherwise the engine will not move the player.
+- In narrative_prose, when describing the current location, tell the player the direction of each exit (e.g. "To the east, a battered door leads to the kitchen") so they can say "go east" or "east" to move.
 - You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
 PLAYER INVENTORY IS EXHAUSTIVE: The player has only the items listed in Inventory. Do not have them produce, pull from a belt, or use flint and steel, keys, or any tool not in that list. If Inventory is [], the player has nothing.
@@ -132,9 +135,10 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
   if (exits.length === 0) {
     out += `\nEXITS FROM THIS LOCATION: (none)\n`;
   } else {
-    out += `\nEXITS FROM THIS LOCATION (only these exist; do not invent others):\n`;
+    out += `\nEXITS FROM THIS LOCATION (only these exist; do not invent others). Each has an optional direction: use it to match "go east"/"north" and tell the player in your narration:\n`;
     for (const e of exits) {
-      out += `  - ${e.label} -> ${e.target}\n`;
+      const dirPart = e.direction ? ` [${e.direction}]` : "";
+      out += `  - ${e.label}${dirPart} -> ${e.target}\n`;
     }
   }
   return out;
@@ -147,10 +151,10 @@ ${recentHistory || "(none)"}
 Check: does the recent narration describe anything inconsistent with the current world state above? If so, note corrections in your response.`;
 }
 
-function buildSectionE(playerCommand: string, locationExits: { label: string; target: string }[]): string {
+function buildSectionE(playerCommand: string, locationExits: { label: string; target: string; direction?: string }[]): string {
   const exitLine =
     locationExits.length > 0
-      ? `\nIf the player goes through a door or exit (or asks to go to another place), you MUST include in node_impacts an entry with node_id "player" and new_location_id set to that exit's destination (the target from EXITS FROM THIS LOCATION). Example: for "battered door -> kitchen" set new_location_id to "kitchen". Without this the player will not move.\n`
+      ? `\nIf the player goes through a door/exit or says a direction (e.g. "east", "go north"), set node_impacts entry for node_id "player" with new_location_id to that exit's target. Match "east"/"go east" to the exit that has direction east, etc. Example: "east: battered door -> kitchen" means new_location_id "kitchen" when the player says "east" or "go through the door". Without this the player will not move.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}

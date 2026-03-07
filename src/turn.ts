@@ -32,15 +32,31 @@ const OLLAMA_UNREACHABLE_PROSE =
 const MALFORMED_RESPONSE_PROSE =
   "The world flickers uncertainly. (Engine: The story engine could not interpret the outcome. Please try again.)";
 
-/** Parse exits JSON from a location node; returns { label, target }[]. */
-function safeParseExits(val: string | undefined | null): { label: string; target: string }[] {
+/** Normalize direction to lowercase north/south/east/west or empty if not a cardinal. */
+function normalizeDirection(d: unknown): string {
+  const s = (d != null && typeof d === "string" ? d.trim() : "").toLowerCase();
+  if (["north", "south", "east", "west"].includes(s)) return s;
+  return "";
+}
+
+/** Parse exits JSON from a location node; returns { label, target, direction? }[]. */
+function safeParseExits(val: string | undefined | null): { label: string; target: string; direction: string }[] {
   try {
-    if (!val) return [];
-    const parsed = JSON.parse(val);
+    if (val == null || (typeof val === "string" && !val.trim())) return [];
+    const raw = typeof val === "string" ? val.trim() : String(val);
+    const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((e): e is { label?: string; target?: string } => e != null && typeof e === "object")
-      .map((e) => ({ label: String(e.label ?? ""), target: String(e.target ?? "") }))
+      .filter((e): e is Record<string, unknown> => e != null && typeof e === "object")
+      .map((e) => {
+        const target =
+          (e.target ?? e.target_node_id ?? e.destination) != null
+            ? String(e.target ?? e.target_node_id ?? e.destination).trim()
+            : "";
+        const label = (e.label ?? e.name) != null ? String(e.label ?? e.name).trim() : "";
+        const direction = normalizeDirection(e.direction);
+        return { label: label || target || "(exit)", target, direction };
+      })
       .filter((e) => e.target.length > 0);
   } catch {
     return [];
@@ -267,7 +283,15 @@ export async function takeTurn(
           updateWorldGraphAdjectives(db, node_id, newJson);
         }
         if (entry.new_location_id != null) {
-          updateWorldGraphLocation(db, node_id, entry.new_location_id);
+          const newLocId = String(entry.new_location_id).trim();
+          const targetNode = getNode(db, newLocId);
+          if (!targetNode) {
+            console.warn(
+              `[TaleShed] Ignoring new_location_id "${newLocId}" for ${node_id}: no such node in world_graph (model may have invented a location).`
+            );
+          } else {
+            updateWorldGraphLocation(db, node_id, newLocId);
+          }
         }
       }
       const newAdjs = Array.isArray(mistralResponse.new_adjectives) ? mistralResponse.new_adjectives : [];
