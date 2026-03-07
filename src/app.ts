@@ -39,6 +39,13 @@ const TakeTurnSchema = z.object({
     ),
 });
 
+const UpdateNodeAdjectivesSchema = z.object({
+  node_id: z.string().describe("The node_id of the entity to update (e.g. 'ciaran', 'player'). Must exist in the world."),
+  adjectives: z
+    .array(z.string())
+    .describe("Full list of adjectives that now describe this entity. Replace the previous set; new terms get definitions automatically."),
+});
+
 export function createTaleshedServer(db: Database.Database): McpServer {
   const server = new McpServer(
     { name: "taleshed", version: "0.1.0" },

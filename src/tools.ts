@@ -12,7 +12,7 @@ import {
   insertVocabulary,
   writeHistoryLedger,
 } from "./db/database.js";
-import { fetchAdjectiveDefinitions } from "./ollama.js";
+import { fetchAdjectiveDefinitions, debugLog } from "./ollama.js";
 
 export interface TakeTurnArgs {
   player_command: string;
@@ -51,13 +51,18 @@ export async function handleUpdateNodeAdjectives(
   db: Database.Database,
   args: UpdateNodeAdjectivesArgs
 ): Promise<UpdateNodeAdjectivesOutput> {
+  debugLog("update_node_adjectives request", JSON.stringify(args, null, 2));
   const nodeId = (args.node_id ?? "").trim();
   if (!nodeId) {
-    return { success: false, error: "node_id is required" };
+    const out: UpdateNodeAdjectivesOutput = { success: false, error: "node_id is required" };
+    debugLog("update_node_adjectives response", JSON.stringify(out));
+    return out;
   }
   const node = getNode(db, nodeId);
   if (!node) {
-    return { success: false, error: `No active node with node_id "${nodeId}"` };
+    const out: UpdateNodeAdjectivesOutput = { success: false, error: `No active node with node_id "${nodeId}"` };
+    debugLog("update_node_adjectives response", JSON.stringify(out));
+    return out;
   }
   const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
   const adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
@@ -65,7 +70,9 @@ export async function handleUpdateNodeAdjectives(
   const newJson = JSON.stringify(adjectives);
   const currentJson = JSON.stringify(currentAdj);
   if (newJson === currentJson) {
-    return { success: true };
+    const out: UpdateNodeAdjectivesOutput = { success: true };
+    debugLog("update_node_adjectives response", JSON.stringify(out));
+    return out;
   }
   db.transaction(() => {
     updateWorldGraphAdjectives(db, nodeId, newJson);
@@ -85,7 +92,8 @@ export async function handleUpdateNodeAdjectives(
   const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
   const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
   if (missing.length > 0) {
-    const definitions = await fetchAdjectiveDefinitions(missing, vocabulary);
+    debugLog("update_node_adjectives fetching definitions", JSON.stringify({ terms: missing }));
+    const definitions = await fetchAdjectiveDefinitions(missing, vocabulary, "update_node_adjectives");
     if (definitions.length > 0) {
       db.transaction(() => {
         for (const d of definitions) {
@@ -96,7 +104,9 @@ export async function handleUpdateNodeAdjectives(
       })();
     }
   }
-  return { success: true };
+  const out: UpdateNodeAdjectivesOutput = { success: true };
+  debugLog("update_node_adjectives response", JSON.stringify(out));
+  return out;
 }
 
 export function handleTakeTurn(db: Database.Database, args: TakeTurnArgs): Promise<TakeTurnOutput> {

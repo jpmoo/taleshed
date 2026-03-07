@@ -12,7 +12,7 @@ const DEBUG_LOG_PATH = path.join(__dirname, "..", "taleshed-errors.log");
 const DEBUG =
   process.env["TALESHED_DEBUG"] === "1" || process.env["TALESHED_DEBUG"] === "true";
 
-function debugLog(label: string, payload: string) {
+export function debugLog(label: string, payload: string) {
   if (!DEBUG) return;
   const line = `[${new Date().toISOString()}] [DEBUG] ${label}\n${payload}\n`;
   try {
@@ -290,11 +290,13 @@ function extractSingleJsonObjectString(raw: string): string | null {
  */
 export async function fetchAdjectiveDefinitions(
   adjectives: string[],
-  existingVocabulary: { adjective: string; rule_description: string }[]
+  existingVocabulary: { adjective: string; rule_description: string }[],
+  callSource?: string
 ): Promise<{ adjective: string; rule_description: string }[]> {
   if (adjectives.length === 0) return [];
   const terms = [...new Set(adjectives)].map((a) => a.trim()).filter(Boolean);
   if (terms.length === 0) return [];
+  const logLabel = callSource ? `vocabulary definitions (${callSource})` : "vocabulary definitions";
   const vocabBlock =
     existingVocabulary.length > 0
       ? `EXISTING VOCABULARY (use these to define new terms in relation when appropriate, e.g. "less guarded" from "guarded"):\n${existingVocabulary.map((v) => `- ${v.adjective}: ${v.rule_description}`).join("\n")}\n\n`
@@ -307,7 +309,7 @@ NEW TERMS TO DEFINE: ${terms.join(", ")}
 
 Return a JSON array. Example for two terms: [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "less guarded", "rule_description": "NPC is somewhat cautious but more open than fully guarded; may share limited information."}]`;
   try {
-    const responseText = await callOllama(prompt, "vocabulary definitions");
+    const responseText = await callOllama(prompt, logLabel);
     let items: Record<string, unknown>[] = [];
     const arrayStr = extractJsonArrayString(responseText);
     if (arrayStr !== null) {
