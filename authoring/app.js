@@ -283,11 +283,19 @@
     }
   }
 
+  /** Map viewport position to content (grid) coordinates. Canvas centers the zoom wrapper. */
   function eventToSlot(wrap, clientX, clientY) {
     const rect = wrap.getBoundingClientRect();
+    const canvas = document.getElementById("grid-canvas");
     const scale = zoomPercent / 100;
-    const layerX = (wrap.scrollLeft + (clientX - rect.left)) / scale;
-    const layerY = (wrap.scrollTop + (clientY - rect.top)) / scale;
+    const sw = Math.round(contentWidth * scale);
+    const sh = Math.round(contentHeight * scale);
+    const canvasW = canvas ? canvas.offsetWidth : wrap.scrollWidth;
+    const canvasH = canvas ? canvas.offsetHeight : wrap.scrollHeight;
+    const wrapperLeft = canvasW / 2 - sw / 2;
+    const wrapperTop = canvasH / 2 - sh / 2;
+    const layerX = (wrap.scrollLeft + (clientX - rect.left) - wrapperLeft) / scale;
+    const layerY = (wrap.scrollTop + (clientY - rect.top) - wrapperTop) / scale;
     const sx = minGridX + Math.floor(layerX / SLOT);
     const sy = minGridY + Math.floor(layerY / SLOT);
     return { gx: sx, gy: sy };
@@ -303,13 +311,15 @@
   }
 
   function centerMapScrollAfterLayout() {
-    centerMapScroll();
     requestAnimationFrame(function () {
       centerMapScroll();
+      requestAnimationFrame(centerMapScroll);
     });
   }
 
   function applyZoom() {
+    const wrap = document.getElementById("grid-wrap");
+    const canvas = document.getElementById("grid-canvas");
     const wrapper = document.getElementById("grid-zoom-wrapper");
     const content = document.getElementById("grid-content");
     const input = document.getElementById("zoom-percent");
@@ -322,6 +332,12 @@
     content.style.transform = "scale(" + scale + ")";
     if (input) {
       input.value = zoomPercent;
+    }
+    if (wrap && canvas) {
+      var cw = Math.max(wrap.clientWidth || 0, sw);
+      var ch = Math.max(wrap.clientHeight || 0, sh);
+      canvas.style.width = cw + "px";
+      canvas.style.height = ch + "px";
     }
   }
 
@@ -468,16 +484,29 @@
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = wrap.getBoundingClientRect();
+      const canvas = document.getElementById("grid-canvas");
       const vx = e.clientX - rect.left;
       const vy = e.clientY - rect.top;
       const scaleOld = zoomPercent / 100;
-      const cx = (wrap.scrollLeft + vx) / scaleOld;
-      const cy = (wrap.scrollTop + vy) / scaleOld;
+      const oldSw = Math.round(contentWidth * scaleOld);
+      const oldSh = Math.round(contentHeight * scaleOld);
+      const canvasW = canvas ? canvas.offsetWidth : wrap.scrollWidth;
+      const canvasH = canvas ? canvas.offsetHeight : wrap.scrollHeight;
+      const wrapperLeftOld = canvasW / 2 - oldSw / 2;
+      const wrapperTopOld = canvasH / 2 - oldSh / 2;
+      const cx = (wrap.scrollLeft + vx - wrapperLeftOld) / scaleOld;
+      const cy = (wrap.scrollTop + vy - wrapperTopOld) / scaleOld;
       const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
       setZoomPercent(zoomPercent + delta, { center: false });
       const scaleNew = zoomPercent / 100;
-      const newScrollLeft = cx * scaleNew - vx;
-      const newScrollTop = cy * scaleNew - vy;
+      const newSw = Math.round(contentWidth * scaleNew);
+      const newSh = Math.round(contentHeight * scaleNew);
+      var canvasW2 = canvas ? canvas.offsetWidth : wrap.scrollWidth;
+      var canvasH2 = canvas ? canvas.offsetHeight : wrap.scrollHeight;
+      var wrapperLeftNew = canvasW2 / 2 - newSw / 2;
+      var wrapperTopNew = canvasH2 / 2 - newSh / 2;
+      var newScrollLeft = wrapperLeftNew + cx * scaleNew - vx;
+      var newScrollTop = wrapperTopNew + cy * scaleNew - vy;
       wrap.scrollLeft = Math.max(0, Math.min(wrap.scrollWidth - wrap.clientWidth, newScrollLeft));
       wrap.scrollTop = Math.max(0, Math.min(wrap.scrollHeight - wrap.clientHeight, newScrollTop));
     }, { passive: false });
@@ -603,6 +632,12 @@
       zoomInput.addEventListener("change", () => setZoomPercent(zoomInput.value));
       zoomInput.addEventListener("blur", () => { zoomInput.value = zoomPercent; });
     }
+    window.addEventListener("resize", function () {
+      if (document.getElementById("panel-world-graph").classList.contains("active")) {
+        applyZoom();
+        centerMapScrollAfterLayout();
+      }
+    });
   })();
 
   (function () {
