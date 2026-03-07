@@ -30,6 +30,12 @@
   let minGridY = 0;
   let skipNextClick = false;
   let panState = null;
+  const ZOOM_MIN = 25;
+  const ZOOM_MAX = 200;
+  const ZOOM_STEP = 5;
+  let zoomPercent = 100;
+  let contentWidth = 0;
+  let contentHeight = 0;
 
   function showApiMessage(message) {
     var warn = document.getElementById("api-warn");
@@ -279,11 +285,45 @@
 
   function eventToSlot(wrap, clientX, clientY) {
     const rect = wrap.getBoundingClientRect();
-    const layerX = wrap.scrollLeft + (clientX - rect.left);
-    const layerY = wrap.scrollTop + (clientY - rect.top);
+    const scale = zoomPercent / 100;
+    const layerX = (wrap.scrollLeft + (clientX - rect.left)) / scale;
+    const layerY = (wrap.scrollTop + (clientY - rect.top)) / scale;
     const sx = minGridX + Math.floor(layerX / SLOT);
     const sy = minGridY + Math.floor(layerY / SLOT);
     return { gx: sx, gy: sy };
+  }
+
+  function centerMapScroll() {
+    const wrap = document.getElementById("grid-wrap");
+    if (!wrap) return;
+    const maxScrollLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    const maxScrollTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+    wrap.scrollLeft = maxScrollLeft * 0.5;
+    wrap.scrollTop = maxScrollTop * 0.5;
+  }
+
+  function applyZoom() {
+    const wrapper = document.getElementById("grid-zoom-wrapper");
+    const content = document.getElementById("grid-content");
+    const input = document.getElementById("zoom-percent");
+    if (!wrapper || !content) return;
+    const scale = zoomPercent / 100;
+    const sw = Math.round(contentWidth * scale);
+    const sh = Math.round(contentHeight * scale);
+    wrapper.style.width = sw + "px";
+    wrapper.style.height = sh + "px";
+    content.style.transform = "scale(" + scale + ")";
+    if (input) {
+      input.value = zoomPercent;
+    }
+  }
+
+  function setZoomPercent(value, options) {
+    const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(Number(value)) || 100));
+    if (next === zoomPercent && !options) return;
+    zoomPercent = next;
+    applyZoom();
+    if (options && options.center !== false) centerMapScroll();
   }
 
   function render() {
@@ -302,6 +342,8 @@
     const width = (maxX - minX + 1) * SLOT + BOX;
     const height = (maxY - minY + 1) * SLOT + BOX;
 
+    contentWidth = width;
+    contentHeight = height;
     content.style.width = width + "px";
     content.style.height = height + "px";
     layer.innerHTML = "";
@@ -364,6 +406,8 @@
       });
       layer.appendChild(box);
     });
+    applyZoom();
+    centerMapScroll();
   }
 
   function setupPanAndDrag() {
@@ -412,6 +456,24 @@
     wrap.addEventListener("mouseout", () => {
       if (!panState && !dragState) wrap.style.cursor = "";
     });
+
+    wrap.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const rect = wrap.getBoundingClientRect();
+      const vx = e.clientX - rect.left;
+      const vy = e.clientY - rect.top;
+      const scaleOld = zoomPercent / 100;
+      const cx = (wrap.scrollLeft + vx) / scaleOld;
+      const cy = (wrap.scrollTop + vy) / scaleOld;
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      setZoomPercent(zoomPercent + delta, { center: false });
+      const scaleNew = zoomPercent / 100;
+      const newScrollLeft = cx * scaleNew - vx;
+      const newScrollTop = cy * scaleNew - vy;
+      wrap.scrollLeft = Math.max(0, Math.min(wrap.scrollWidth - wrap.clientWidth, newScrollLeft));
+      wrap.scrollTop = Math.max(0, Math.min(wrap.scrollHeight - wrap.clientHeight, newScrollTop));
+    }, { passive: false });
 
     wrap.addEventListener("dblclick", (e) => {
       const box = e.target.closest(".location-box");
@@ -523,6 +585,19 @@
   }
 
   setupPanAndDrag();
+
+  (function setupZoomControls() {
+    const zoomOut = document.getElementById("zoom-out");
+    const zoomIn = document.getElementById("zoom-in");
+    const zoomInput = document.getElementById("zoom-percent");
+    if (zoomOut) zoomOut.addEventListener("click", () => setZoomPercent(zoomPercent - ZOOM_STEP));
+    if (zoomIn) zoomIn.addEventListener("click", () => setZoomPercent(zoomPercent + ZOOM_STEP));
+    if (zoomInput) {
+      zoomInput.addEventListener("change", () => setZoomPercent(zoomInput.value));
+      zoomInput.addEventListener("blur", () => { zoomInput.value = zoomPercent; });
+    }
+  })();
+
   (function () {
     const checkbox = document.getElementById("show-locations");
     const nodesPanel = document.getElementById("panel-nodes");

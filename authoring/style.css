@@ -44,6 +44,50 @@ body {
 .panel.active {
   display: flex;
 }
+.world-graph-toolbar {
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--grid);
+  background: #f8f6f0;
+  display: flex;
+  align-items: center;
+}
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.btn-zoom {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  line-height: 1;
+  border-radius: 4px;
+  border: 1px solid var(--grid);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn-zoom:hover {
+  background: #e8e4da;
+}
+.zoom-percent-input {
+  width: 3.5rem;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  text-align: right;
+}
+.zoom-percent-suffix {
+  font-size: 0.9rem;
+  color: #555;
+}
 .grid-wrap {
   flex: 1;
   min-height: 200px;
@@ -170,10 +214,12 @@ body {
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
 .grid-wrap {
   position: relative;
-  padding: 2rem;
   overflow: auto;
-  min-height: calc(100vh - 120px);
+  min-height: 0;
   cursor: grab;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -181,10 +227,17 @@ body {
   background-position: 0 0;
 }
 
+.grid-zoom-wrapper {
+  margin: auto;
+  flex-shrink: 0;
+  position: relative;
+}
+
 .grid-content {
   position: relative;
   min-width: 0;
   min-height: 0;
+  transform-origin: 0 0;
 }
 
 .exit-lines {

@@ -14,10 +14,20 @@
   </header>
   <main class="main-content">
     <div id="panel-world-graph" class="panel active">
+      <div class="world-graph-toolbar">
+        <div class="zoom-controls" aria-label="Zoom">
+          <button type="button" class="btn btn-zoom" id="zoom-out" title="Zoom out 5%">−</button>
+          <input type="number" id="zoom-percent" class="zoom-percent-input" min="25" max="200" step="5" value="100" aria-label="Zoom percentage" />
+          <span class="zoom-percent-suffix">%</span>
+          <button type="button" class="btn btn-zoom" id="zoom-in" title="Zoom in 5%">+</button>
+        </div>
+      </div>
       <div id="grid-wrap" class="grid-wrap">
-        <div id="grid-content" class="grid-content">
-          <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
-          <div id="locations-layer" class="locations-layer"></div>
+        <div id="grid-zoom-wrapper" class="grid-zoom-wrapper">
+          <div id="grid-content" class="grid-content">
+            <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
+            <div id="locations-layer" class="locations-layer"></div>
+          </div>
         </div>
       </div>
     </div>
