@@ -105,7 +105,7 @@ CRITICAL — WHAT THE PLAYER CAN INTERACT WITH:
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. Only objects whose node_id is in the player's Inventory are carried or held by the player; objects listed in ENTITIES PRESENT but not in Inventory are in the location (the room), not in the player's hands. Do not describe the player as holding or carrying something unless it is in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
 When writing narrative_prose:
-- You MUST mention the location, every entity in ENTITIES PRESENT, and every exit in EXITS FROM THIS LOCATION. Describe the location/room first, then each NPC by name, then each object, then the exits (direction and destination for each). For each object in the list, mention the object itself (e.g. "the torch", "an unlit torch in the bracket") so the player can refer to it (e.g. "take torch"). For each exit, give direction and where it leads (e.g. "To the east, a battered door leads to the kitchen") so the player can move. Never describe a container or fixture as empty when an entity in ENTITIES PRESENT is inside it: if the torch is listed, the bracket is not empty—say the torch is in the bracket (e.g. "the bracket holds an unlit torch", "an unlit torch sits in the bracket"). Do not describe only the container ("an empty torch bracket"); name the contained object and where it is. Never add people or objects not in the list; never omit a listed entity or a listed exit.
+- You MUST mention the location, every entity in ENTITIES PRESENT, and every exit in EXITS FROM THIS LOCATION. Describe the location/room first, then each NPC by name, then each object, then the exits (direction and destination for each). For each object in the list, mention the object itself (e.g. "the torch", "an unlit torch in the bracket") so the player can refer to it (e.g. "take torch"). For each exit, give direction and where it leads (e.g. "To the east, a battered door leads to the kitchen") so the player can move. CRITICAL — containers with "contains:" in the entity list are NOT empty: do not say "empty bracket", "no torch rests in it", or that the container is empty; say what is inside (e.g. "the bracket holds an unlit torch"). Never add people or objects not in the list; never omit a listed entity or a listed exit.
 
 CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
 - Interpret the player's action literally. Do only the exact action(s) the player stated. Do not infer, assume, or add any action the player did not explicitly request.
@@ -135,13 +135,25 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${loc.base_description}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). These are the only people and objects the player can take, use, talk to, or otherwise affect this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present. (The player may still interact with scenery—atmospheric detail—for narrative-only actions like sitting or leaning, with no world-state impact.) Your narrative_prose MUST mention each of these: the location and every entity below. For each object, mention the object itself (e.g. "the torch") so the player can take or use it. If an object is listed here (e.g. torch_01, The Torch), the room HAS that object: never say it is absent, missing, or that only an empty fixture remains. Never describe a container (e.g. a bracket) as empty when another entity in this list is inside it—describe the contained object as present (e.g. "the bracket holds the torch", "an unlit torch in the bracket").
+ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). These are the only people and objects the player can take, use, talk to, or otherwise affect this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present. (The player may still interact with scenery—atmospheric detail—for narrative-only actions like sitting or leaning, with no world-state impact.) Your narrative_prose MUST mention each of these: the location and every entity below. CRITICAL: If an entity shows "contains: X", then X is inside it—do NOT describe that entity as empty; describe X as present (e.g. "the bracket holds the torch"). For each object, mention the object itself (e.g. "the torch") so the player can take or use it. If an object is listed here (e.g. torch_01, The Torch), the room HAS that object: never say it is absent, missing, or that only an empty fixture remains.
 `;
+  const containedBy = new Map<string, string[]>();
+  for (const e of ctx.entities) {
+    const locId = e.location_id ?? null;
+    if (locId != null && locId !== loc.node_id) {
+      const list = containedBy.get(locId) ?? [];
+      list.push(e.node_id);
+      containedBy.set(locId, list);
+    }
+  }
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
     const inside =
       e.location_id != null && e.location_id !== loc.node_id ? ` | inside: ${e.location_id}` : "";
-    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${inside}\n`;
+    const containsList = containedBy.get(e.node_id);
+    const contains =
+      containsList != null && containsList.length > 0 ? ` | contains: ${containsList.join(", ")}` : "";
+    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${inside}${contains}\n`;
     out += `  Recent history: ${e.recent_history.join(" ") || "(none)"}\n`;
   }
   out += `\nPLAYER:\n`;
