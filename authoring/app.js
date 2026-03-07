@@ -311,9 +311,13 @@
   }
 
   function centerMapScrollAfterLayout() {
-    requestAnimationFrame(function () {
+    var run = function () {
       centerMapScroll();
-      requestAnimationFrame(centerMapScroll);
+    };
+    requestAnimationFrame(function () {
+      run();
+      requestAnimationFrame(run);
+      setTimeout(run, 50);
     });
   }
 
@@ -334,10 +338,15 @@
       input.value = zoomPercent;
     }
     if (wrap && canvas) {
-      var cw = Math.max(wrap.clientWidth || 0, sw);
-      var ch = Math.max(wrap.clientHeight || 0, sh);
-      canvas.style.width = cw + "px";
-      canvas.style.height = ch + "px";
+      var wrapW = wrap.clientWidth || 0;
+      var wrapH = wrap.clientHeight || 0;
+      if (wrapW > 0 && wrapH > 0) {
+        canvas.style.width = Math.max(wrapW, sw) + "px";
+        canvas.style.height = Math.max(wrapH, sh) + "px";
+      } else {
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+      }
     }
   }
 
@@ -638,6 +647,16 @@
         centerMapScrollAfterLayout();
       }
     });
+    var wrapEl = document.getElementById("grid-wrap");
+    if (wrapEl && typeof ResizeObserver !== "undefined") {
+      var ro = new ResizeObserver(function () {
+        if (document.getElementById("panel-world-graph").classList.contains("active")) {
+          applyZoom();
+          centerMapScrollAfterLayout();
+        }
+      });
+      ro.observe(wrapEl);
+    }
   })();
 
   (function () {

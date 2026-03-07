@@ -218,16 +218,16 @@ body {
   min-height: 0;
   cursor: grab;
   background: var(--paper);
+  display: flex;
 }
 
-/* Canvas fills scroll area (min viewport), grows with content; grid visible everywhere when scrolling */
+/* Canvas: centered via margin:auto (scroll works); min size = viewport so grid fills; zoom wrapper centered inside */
 .grid-canvas {
-  min-width: 100%;
-  min-height: 100%;
+  margin: auto;
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  flex-shrink: 0;
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);

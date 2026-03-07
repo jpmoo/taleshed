@@ -33,7 +33,7 @@ const TakeTurnSchema = z.object({
   player_command: z
     .string()
     .describe(
-      "The player's exact command, verbatim. Do not add or assume actions: e.g. if the player says 'take torch', pass exactly that—do not expand to 'take torch and light it'. One command = only the action(s) the player stated."
+      "The player's exact command, verbatim. Pass the full phrase the player typed. Do not simplify: e.g. if the player said 'take the torch and go through the door', pass exactly that—not 'east' or a single action. Do not add or assume actions: e.g. if they said 'take torch', pass that—do not expand to 'take torch and light it'."
     ),
   recent_history: z
     .string()
@@ -61,7 +61,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Take Turn",
       description:
-        "The core game loop. Pass the player's command literally (exactly as the player said it) and, when available, recent_history (or suggested_recent_history from the previous response) so the engine can keep narration consistent. Do not add, infer, or assume extra actions: e.g. 'take torch' means only take—do not also light it. Returns result, prose for narration, and suggested_recent_history to pass back on the next call. Optional error if the tool failed. When presenting the engine's prose to the player: be verbose. Expand and narrate evocatively rather than quoting the prose briefly.",
+        "The core game loop. Pass the player's command exactly as the player typed it. You may send compound commands as one phrase (e.g. 'take the torch and go through the door') or as separate take_turn calls (e.g. 'take torch', then 'go through door', then 'east'); the engine handles both. Each single command (e.g. 'go through door', 'east') must be processed correctly. When available, pass recent_history (or suggested_recent_history from the previous response). Returns result, prose for narration, and suggested_recent_history. When presenting the engine's prose to the player: be verbose.",
       inputSchema: TakeTurnSchema,
     },
     async (args: unknown) => {
@@ -71,22 +71,38 @@ export function createTaleshedServer(db: Database.Database): McpServer {
           content: [{ type: "text" as const, text: JSON.stringify({ result: "error", prose: "", error: parsed.error.message }) }],
         };
       }
-      const out = await handleTakeTurn(db, parsed.data);
-      const suggested = buildSuggestedRecentHistory(
-        parsed.data.recent_history,
-        parsed.data.player_command,
-        out.prose
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              suggested != null ? { ...out, suggested_recent_history: suggested } : out
-            ),
-          },
-        ],
-      };
+      try {
+        const out = await handleTakeTurn(db, parsed.data);
+        const suggested = buildSuggestedRecentHistory(
+          parsed.data.recent_history,
+          parsed.data.player_command,
+          out.prose
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                suggested != null ? { ...out, suggested_recent_history: suggested } : out
+              ),
+            },
+          ],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                result: "error",
+                prose: "",
+                error: message,
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 

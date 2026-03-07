@@ -87,6 +87,9 @@ function resolveMovementTarget(
   if (generic.some((g) => cmd === g || cmd.startsWith(g + " "))) {
     return locationExits[0].target;
   }
+  if (cmd.startsWith("go through") || cmd.startsWith("through ")) {
+    return locationExits[0].target;
+  }
   if (cmd === "go" && locationExits.length === 1) return locationExits[0].target;
   return null;
 }
