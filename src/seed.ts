@@ -10,6 +10,11 @@ import { insertVocabulary } from "./db/database.js";
 const dbPath = getDbPath();
 const db = initDatabase(dbPath);
 
+function clearHistoryLedger(): void {
+  db.prepare("DELETE FROM history_ledger").run();
+  console.log("Cleared history_ledger.");
+}
+
 const STARTER_VOCABULARY: [string, string][] = [
   ["locked", "Blocks passage or interaction. Requires a key, tool, or specific action to remove."],
   ["broken", "Object cannot perform its primary function. May still be used as raw material or weapon."],
@@ -50,6 +55,7 @@ function seedWorld(): void {
   console.log("Inserted sample world: scriptorium (exit to kitchen), kitchen (fire), torch_01 (takeable), ciaran, player.");
 }
 
+clearHistoryLedger();
 seedVocabulary();
 seedWorld();
 db.close();
