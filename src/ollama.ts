@@ -320,7 +320,7 @@ ${terms.join(", ")}
 
 For each candidate term: if it has the same or very similar meaning to an existing vocabulary term, respond with that existing term exactly as listed above. Otherwise respond with the candidate unchanged (the game will define it as new).
 
-CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be either an existing vocabulary term (exact spelling from the list) or the candidate itself. Example: {"content": "settled", "warm": "warm"} if "content" is redundant with "settled" and "warm" is new.
+CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list above—exact spelling—OR (2) the candidate itself unchanged. Do not invent new terms (e.g. "not_in_vocabulary" is wrong). Example: {"content": "settled", "warm": "warm"} if "content" is redundant with "settled" and "warm" is new.
 
 Return ONLY the JSON object. No other text.`;
   if (DEBUG) {
@@ -340,13 +340,13 @@ Return ONLY the JSON object. No other text.`;
     for (const candidate of terms) {
       const key = candidate.toLowerCase();
       const raw = parsed[candidate] ?? parsed[key];
-      const value = raw != null && typeof raw === "string" ? String(raw).trim() : candidate.trim();
+      const value = raw != null && typeof raw === "string" ? String(raw).trim() : "";
       const valueLower = value.toLowerCase();
-      if (vocabLower.has(valueLower)) {
+      if (value && vocabLower.has(valueLower)) {
         const existing = vocabList.find((v) => v.toLowerCase() === valueLower)!;
         result.set(key, existing);
       } else {
-        result.set(key, value || candidate.trim());
+        result.set(key, candidate.trim());
       }
     }
     if (DEBUG) {
