@@ -71,6 +71,8 @@
       });
   }
 
+  const DIRECTIONS = ["north", "south", "east", "west"];
+
   function parseExits(str) {
     if (!str || !str.trim()) return [];
     try {
@@ -79,6 +81,157 @@
     } catch {
       return [];
     }
+  }
+
+  function normalizeExit(e) {
+    const label = (e.label || e.name || e.target || "(exit)").trim() || "(exit)";
+    const target = String(e.target || e.target_node_id || e.destination || "").trim();
+    const dir = (e.direction || "").toLowerCase();
+    const direction = DIRECTIONS.includes(dir) ? dir : DIRECTIONS[0];
+    return { label, target, direction };
+  }
+
+  function getOtherLocationIds(currentNodeId) {
+    return locations.filter(function (l) { return l.node_id !== currentNodeId; }).map(function (l) { return l.node_id; });
+  }
+
+  function renderExitsList(exitsData, currentNodeId) {
+    const listEl = document.getElementById("exits-list");
+    if (!listEl) return;
+    const exits = Array.isArray(exitsData) ? exitsData : parseExits(typeof exitsData === "string" ? exitsData : "[]");
+    const usedDirections = new Set(exits.map(function (e) { return normalizeExit(e).direction; }));
+    const otherIds = getOtherLocationIds(currentNodeId || "");
+
+    listEl.innerHTML = "";
+    exits.forEach(function (e, index) {
+      const ex = normalizeExit(e);
+      const row = document.createElement("div");
+      row.className = "exit-row";
+      row.dataset.index = String(index);
+      const labelInput = document.createElement("input");
+      labelInput.type = "text";
+      labelInput.className = "exit-label";
+      labelInput.placeholder = "e.g. battered door";
+      labelInput.value = ex.label;
+      const targetSelect = document.createElement("select");
+      targetSelect.className = "exit-target";
+      const emptyOpt = document.createElement("option");
+      emptyOpt.value = "";
+      emptyOpt.textContent = "— select —";
+      targetSelect.appendChild(emptyOpt);
+      otherIds.forEach(function (id) {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = id;
+        if (id === ex.target) opt.selected = true;
+        targetSelect.appendChild(opt);
+      });
+      const usedByOtherRows = new Set(
+        exits.filter(function (_, j) { return j !== index; }).map(function (e) { return normalizeExit(e).direction; })
+      );
+      const dirSelect = document.createElement("select");
+      dirSelect.className = "exit-direction";
+      DIRECTIONS.forEach(function (d) {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = d;
+        if (d === ex.direction) opt.selected = true;
+        if (usedByOtherRows.has(d)) opt.disabled = true;
+        dirSelect.appendChild(opt);
+      });
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn-delete-exit";
+      delBtn.textContent = "Delete";
+      delBtn.setAttribute("aria-label", "Delete this exit");
+      delBtn.addEventListener("click", function () {
+        if (!confirm("Remove this exit? The reverse exit in the target room will also be removed.")) return;
+        row.remove();
+      });
+      row.appendChild(labelInput);
+      row.appendChild(targetSelect);
+      row.appendChild(dirSelect);
+      row.appendChild(delBtn);
+      listEl.appendChild(row);
+    });
+  }
+
+  function collectExitsFromList() {
+    const listEl = document.getElementById("exits-list");
+    if (!listEl) return [];
+    const rows = listEl.querySelectorAll(".exit-row");
+    const byDir = {};
+    rows.forEach(function (row) {
+      const labelInp = row.querySelector(".exit-label");
+      const targetSel = row.querySelector(".exit-target");
+      const dirSel = row.querySelector(".exit-direction");
+      if (!dirSel || !targetSel) return;
+      const direction = dirSel.value;
+      const target = (targetSel.value || "").trim();
+      if (!target) return;
+      if (byDir[direction]) return;
+      byDir[direction] = {
+        label: (labelInp && labelInp.value) ? labelInp.value.trim() : target,
+        target: target,
+        direction: direction,
+      };
+    });
+    return DIRECTIONS.map(function (d) { return byDir[d]; }).filter(Boolean);
+  }
+
+  function addExitRow(currentNodeId) {
+    const listEl = document.getElementById("exits-list");
+    if (!listEl) return;
+    const existing = collectExitsFromList();
+    const usedDirs = new Set(existing.map(function (e) { return e.direction; }));
+    const firstFree = DIRECTIONS.find(function (d) { return !usedDirs.has(d); });
+    if (!firstFree) {
+      alert("Only one exit per direction. Remove an exit first to add another.");
+      return;
+    }
+    const otherIds = getOtherLocationIds(currentNodeId || "");
+    const row = document.createElement("div");
+    row.className = "exit-row";
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.className = "exit-label";
+    labelInput.placeholder = "e.g. battered door";
+    const targetSelect = document.createElement("select");
+    targetSelect.className = "exit-target";
+    const emptyOpt = document.createElement("option");
+    emptyOpt.value = "";
+    emptyOpt.textContent = "— select —";
+    targetSelect.appendChild(emptyOpt);
+    otherIds.forEach(function (id) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = id;
+      targetSelect.appendChild(opt);
+    });
+    const dirSelect = document.createElement("select");
+    dirSelect.className = "exit-direction";
+    DIRECTIONS.forEach(function (d) {
+      const opt = document.createElement("option");
+      opt.value = d;
+      opt.textContent = d;
+      if (d === firstFree) opt.selected = true;
+      if (usedDirs.has(d)) opt.disabled = true;
+      dirSelect.appendChild(opt);
+    });
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn-delete-exit";
+    delBtn.textContent = "Delete";
+    delBtn.setAttribute("aria-label", "Delete this exit");
+    delBtn.addEventListener("click", function () {
+      if (!confirm("Remove this exit? The reverse exit in the target room will also be removed.")) return;
+      row.remove();
+    });
+    row.appendChild(labelInput);
+    row.appendChild(targetSelect);
+    row.appendChild(dirSelect);
+    row.appendChild(delBtn);
+    listEl.appendChild(row);
   }
 
   /** Assign grid_x, grid_y to locations from exit graph. Root at (0,0); neighbors placed by direction (north=above, east=right, etc.). */
@@ -370,6 +523,16 @@
   }
 
   setupPanAndDrag();
+  (function () {
+    const checkbox = document.getElementById("show-locations");
+    const gridWrap = document.getElementById("grid-wrap");
+    if (checkbox && gridWrap) {
+      checkbox.addEventListener("change", function () {
+        if (this.checked) gridWrap.classList.remove("locations-hidden");
+        else gridWrap.classList.add("locations-hidden");
+      });
+    }
+  })();
   fetchGraph();
 
   // --- History Ledger ---
@@ -610,6 +773,8 @@
     document.getElementById("edit-grid_x").value = "";
     document.getElementById("edit-grid_y").value = "";
     document.getElementById("edit-exits").value = "[]";
+    document.getElementById("exits-section").classList.remove("hidden");
+    renderExitsList([], null);
     document.getElementById("modal-title").textContent = "New node";
     document.getElementById("modal-delete").style.display = "none";
     document.getElementById("modal").classList.remove("hidden");
@@ -646,21 +811,47 @@
     document.getElementById("edit-meta").value = node.meta ?? "";
     document.getElementById("edit-grid_x").value = node.grid_x ?? "";
     document.getElementById("edit-grid_y").value = node.grid_y ?? "";
-    document.getElementById("edit-exits").value =
-      typeof node.exits === "string" ? node.exits : JSON.stringify(node.exits || [], null, 2);
+    if (node.node_type === "location") {
+      document.getElementById("exits-section").classList.remove("hidden");
+      renderExitsList(node.exits, node.node_id);
+    } else {
+      document.getElementById("exits-section").classList.add("hidden");
+      document.getElementById("edit-exits").value = "[]";
+    }
     document.getElementById("modal-title").textContent = "Edit: " + (node.name || node.node_id);
     document.getElementById("modal-delete").style.display = "";
     document.getElementById("modal").classList.remove("hidden");
     document.getElementById("modal-backdrop").classList.remove("hidden");
   }
 
+  document.getElementById("edit-node_type").addEventListener("change", function () {
+    const isLocation = this.value === "location";
+    const section = document.getElementById("exits-section");
+    if (isLocation) {
+      section.classList.remove("hidden");
+      renderExitsList([], document.getElementById("edit-node_id").value || null);
+    } else {
+      section.classList.add("hidden");
+      document.getElementById("edit-exits").value = "[]";
+    }
+  });
+
+  document.getElementById("exits-add").addEventListener("click", function () {
+    addExitRow(document.getElementById("edit-node_id").value || null);
+  });
+
   document.getElementById("modal-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const nodeId = document.getElementById("edit-node_id").value;
     const nodeIdRo = document.getElementById("edit-node_id_ro").value.trim();
     const isNew = !nodeId;
+    const nodeType = document.getElementById("edit-node_type").value;
+    const exitsJson = nodeType === "location"
+      ? JSON.stringify(collectExitsFromList())
+      : "[]";
+    document.getElementById("edit-exits").value = exitsJson;
     const payload = {
-      node_type: document.getElementById("edit-node_type").value,
+      node_type: nodeType,
       name: document.getElementById("edit-name").value.trim(),
       base_description: document.getElementById("edit-base_description").value,
       adjectives: document.getElementById("edit-adjectives").value.trim() || "[]",
@@ -679,7 +870,7 @@
         const n = parseInt(v, 10);
         return isNaN(n) ? null : n;
       })(),
-      exits: document.getElementById("edit-exits").value.trim() || "[]",
+      exits: exitsJson,
     };
     if (isNew) {
       const newId = nodeIdRo || "node_" + Date.now();

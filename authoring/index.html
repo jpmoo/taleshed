@@ -14,7 +14,13 @@
   </header>
   <main class="main-content">
     <div id="panel-world-graph" class="panel active">
-      <div id="grid-wrap" class="grid-wrap">
+      <div class="world-graph-toolbar">
+        <label class="world-graph-option">
+          <input type="checkbox" id="show-locations" />
+          Show location nodes
+        </label>
+      </div>
+      <div id="grid-wrap" class="grid-wrap locations-hidden">
         <div id="grid-content" class="grid-content">
           <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
           <div id="locations-layer" class="locations-layer"></div>
@@ -113,10 +119,13 @@
         <label for="edit-grid_y">grid_y</label>
         <input type="number" id="edit-grid_y" name="grid_y" step="1" placeholder="0" />
       </div>
-      <div class="field">
-        <label>exits (JSON: [{ "label", "target", "direction": "north"|"south"|"east"|"west" }])</label>
-        <textarea id="edit-exits" name="exits" rows="4" placeholder='[{"label":"door","target":"kitchen","direction":"east"}]'></textarea>
+      <div class="field exits-section" id="exits-section">
+        <label>Exits</label>
+        <p class="field-hint">Location only. One exit per direction. Changes sync to the target room.</p>
+        <div id="exits-list" class="exits-list"></div>
+        <button type="button" class="btn btn-sm btn-add-exit" id="exits-add">+ Add exit</button>
       </div>
+      <input type="hidden" id="edit-exits" name="exits" />
       <div class="modal-actions">
         <button type="submit" class="btn btn-save">Save</button>
         <button type="button" class="btn btn-delete" id="modal-delete">Delete</button>

@@ -29,6 +29,75 @@ const HOST = process.env["TALESHED_WEB_IP"] ?? "0.0.0.0";
 const dbPath = getDbPath();
 const db = initDatabase(dbPath);
 
+const DIRECTIONS = ["north", "south", "east", "west"] as const;
+function oppositeDirection(d: string): string {
+  const lower = (d || "").toLowerCase();
+  if (lower === "north") return "south";
+  if (lower === "south") return "north";
+  if (lower === "east") return "west";
+  if (lower === "west") return "east";
+  return "";
+}
+
+type ExitRow = { label: string; target: string; direction: string };
+function parseExitsJson(exits: string): ExitRow[] {
+  try {
+    const raw = typeof exits === "string" ? exits.trim() : "";
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((e): e is Record<string, unknown> => e != null && typeof e === "object")
+      .map((e) => ({
+        label: String(e.label ?? e.name ?? "").trim() || String(e.target ?? "").trim() || "(exit)",
+        target: String(e.target ?? e.target_node_id ?? e.destination ?? "").trim(),
+        direction: DIRECTIONS.includes((e.direction as string)?.toLowerCase() as (typeof DIRECTIONS)[number])
+          ? (e.direction as string).toLowerCase()
+          : "",
+      }))
+      .filter((e) => e.target && e.direction);
+  } catch {
+    return [];
+  }
+}
+
+function exitsToJson(exits: ExitRow[]): string {
+  return JSON.stringify(exits.map((e) => ({ label: e.label, target: e.target, direction: e.direction })));
+}
+
+/** Update target location's exits: add or remove the reverse exit. */
+function syncReverseExit(
+  fromNodeId: string,
+  fromExits: ExitRow[],
+  targetNodeId: string,
+  reverseDirection: string,
+  labelFromTargetSide: string,
+  add: boolean
+): void {
+  const row = db.prepare("SELECT exits FROM world_graph WHERE node_id = ? AND is_active = 1").get(targetNodeId) as { exits: string } | undefined;
+  if (!row) return;
+  let targetExits = parseExitsJson(row.exits);
+  if (add) {
+    if (targetExits.some((e) => e.direction === reverseDirection)) return;
+    targetExits = [...targetExits, { label: labelFromTargetSide, target: fromNodeId, direction: reverseDirection }];
+  } else {
+    targetExits = targetExits.filter((e) => !(e.target === fromNodeId && e.direction === reverseDirection));
+  }
+  db.prepare("UPDATE world_graph SET exits = ? WHERE node_id = ?").run(exitsToJson(targetExits), targetNodeId);
+}
+
+/** When deleting a node, remove any exits (from other locations) that target this node. */
+function removeExitsTargetingNode(deletedNodeId: string): void {
+  const locations = db.prepare("SELECT node_id, exits FROM world_graph WHERE node_type = 'location' AND is_active = 1").all() as { node_id: string; exits: string }[];
+  for (const loc of locations) {
+    const exits = parseExitsJson(loc.exits);
+    const filtered = exits.filter((e) => e.target !== deletedNodeId);
+    if (filtered.length !== exits.length) {
+      db.prepare("UPDATE world_graph SET exits = ? WHERE node_id = ?").run(exitsToJson(filtered), loc.node_id);
+    }
+  }
+}
+
 function getApiKey(req: Request): string | null {
   const q = (req.query?.api as string) ?? null;
   const h = (req.headers["x-api-key"] as string) ?? null;
@@ -83,8 +152,8 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     return;
   }
   try {
-    const existing = db.prepare("SELECT 1 FROM world_graph WHERE node_id = ?").get(nodeId);
-    if (!existing) {
+    const existingRow = db.prepare("SELECT node_type, exits FROM world_graph WHERE node_id = ?").get(nodeId) as { node_type: string; exits: string } | undefined;
+    if (!existingRow) {
       res.status(404).json({ error: "Not found" });
       return;
     }
@@ -95,9 +164,31 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     const location_id = body.location_id != null ? String(body.location_id) : null;
     const is_active = body.is_active != null ? (body.is_active ? 1 : 0) : 1;
     const meta = body.meta != null ? String(body.meta) : null;
-    const exits = typeof body.exits === "string" ? body.exits : JSON.stringify(body.exits ?? []);
+    let exits = typeof body.exits === "string" ? body.exits : JSON.stringify(body.exits ?? []);
     const grid_x = body.grid_x != null ? Number(body.grid_x) : null;
     const grid_y = body.grid_y != null ? Number(body.grid_y) : null;
+
+    if (node_type === "location") {
+      const oldExits = parseExitsJson(existingRow.exits);
+      const newExits = parseExitsJson(exits);
+      const oldByDir = new Map(oldExits.map((e) => [e.direction, e]));
+      const newByDir = new Map(newExits.map((e) => [e.direction, e]));
+      for (const e of oldExits) {
+        if (!newByDir.has(e.direction)) {
+          syncReverseExit(nodeId, newExits, e.target, oppositeDirection(e.direction), e.label, false);
+        }
+      }
+      for (const e of newExits) {
+        const old = oldByDir.get(e.direction);
+        if (!old || old.target !== e.target) {
+          if (old && old.target) syncReverseExit(nodeId, newExits, old.target, oppositeDirection(old.direction), old.label, false);
+          syncReverseExit(nodeId, newExits, e.target, oppositeDirection(e.direction), e.label, true);
+        }
+      }
+      exits = exitsToJson(newExits);
+    } else {
+      exits = "[]";
+    }
 
     db.prepare(
       `UPDATE world_graph SET node_type = ?, name = ?, base_description = ?, adjectives = ?, location_id = ?, is_active = ?, meta = ?, exits = ?, grid_x = ?, grid_y = ? WHERE node_id = ?`
@@ -142,6 +233,12 @@ app.post("/api/world-graph", (req: Request, res: Response) => {
       `INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y);
+    if (node_type === "location") {
+      const newExits = parseExitsJson(exits);
+      for (const e of newExits) {
+        syncReverseExit(node_id, newExits, e.target, oppositeDirection(e.direction), e.label, true);
+      }
+    }
     const row = db.prepare("SELECT * FROM world_graph WHERE node_id = ?").get(node_id) as WorldNode;
     res.status(201).json(row);
   } catch (e) {
@@ -153,6 +250,7 @@ app.post("/api/world-graph", (req: Request, res: Response) => {
 app.delete("/api/world-graph/:node_id", (req: Request, res: Response) => {
   const nodeId = req.params.node_id;
   try {
+    removeExitsTargetingNode(nodeId);
     const result = db.prepare("DELETE FROM world_graph WHERE node_id = ?").run(nodeId);
     if (result.changes === 0) {
       res.status(404).json({ error: "Not found" });

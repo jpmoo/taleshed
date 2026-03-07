@@ -149,6 +149,20 @@ body {
 .api-warn code { background: rgba(0,0,0,0.06); padding: 0.1em 0.3em; border-radius: 2px; }
 .api-warn.hidden { display: none; }
 
+.world-graph-toolbar {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--grid);
+  background: #f8f6f0;
+}
+.world-graph-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.world-graph-option input { width: auto; }
+.grid-wrap.locations-hidden .location-box { display: none; }
 .grid-wrap {
   position: relative;
   padding: 2rem;
@@ -336,3 +350,43 @@ body {
   border-color: var(--danger);
 }
 .btn-delete:hover { filter: brightness(1.08); }
+
+.field-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 0 0 0.4rem 0;
+}
+.exits-list {
+  margin-bottom: 0.5rem;
+}
+.exit-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.exit-row .exit-label { flex: 1; min-width: 0; }
+.exit-row .exit-target { width: 8rem; }
+.exit-row .exit-direction { width: 5.5rem; }
+.exit-row .btn-delete-exit {
+  flex-shrink: 0;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  background: var(--danger);
+  color: var(--white);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.exit-row .btn-delete-exit:hover { filter: brightness(1.08); }
+.btn-add-exit {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: var(--white);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-add-exit:hover { filter: brightness(1.08); }
+.exits-section.hidden { display: none; }
