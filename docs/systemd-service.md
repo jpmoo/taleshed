@@ -2,7 +2,17 @@
 
 Run TaleShed in the background, independent of SSH, and start it automatically after reboot.
 
-## 1. Create the service file
+You can run:
+
+- **MCP only** – one service for the HTTP MCP server.
+- **Authoring only** – a second service for the authoring web app (optional, if you don’t use the combined option).
+- **MCP + Authoring together** – one service that starts both; a single restart restarts both (see below).
+
+---
+
+## Option A: MCP server only (one service)
+
+### 1. Create the service file
 
 On the server, create a systemd unit file (adjust paths and user if needed):
 
@@ -85,3 +95,79 @@ sudo systemctl restart taleshed
 ```
 
 If you re-seed the DB, restart the service so it uses the new database state.
+
+---
+
+## Option B: One service runs both MCP and authoring (restart restarts both)
+
+To have **one** systemd service start both the MCP server and the authoring web app, use the wrapper script. A single `systemctl restart taleshed` then restarts both processes.
+
+1. Make the script executable (once, in the project):
+
+   ```bash
+   chmod +x /home/jpmoo/taleshed/scripts/run-with-authoring.sh
+   ```
+
+2. Ensure `.env` includes authoring settings (at least `TALESHED_WEB_API_KEY`). See `.env.example`.
+
+3. Use the same `taleshed.service` as above, but change **ExecStart** to the script:
+
+   ```ini
+   ExecStart=/home/jpmoo/taleshed/scripts/run-with-authoring.sh
+   ```
+
+   If Node is not on the default `PATH` when systemd runs the service, set it:
+
+   ```ini
+   Environment=PATH=/usr/bin:/bin
+   ```
+   or set `Environment=NODE=/full/path/to/node` if you use nvm.
+
+4. Reload and restart:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart taleshed
+   ```
+
+If either the MCP server or the authoring server exits, the script exits and systemd will restart both (when `Restart=on-failure`).
+
+---
+
+## Option C: Two separate services (MCP and authoring)
+
+If you prefer to run and restart MCP and authoring independently, keep the MCP-only service above and add a second unit:
+
+```bash
+sudo nano /etc/systemd/system/taleshed-authoring.service
+```
+
+```ini
+[Unit]
+Description=TaleShed Authoring Web App
+After=network.target
+
+[Service]
+Type=simple
+User=jpmoo
+Group=jpmoo
+WorkingDirectory=/home/jpmoo/taleshed
+EnvironmentFile=-/home/jpmoo/taleshed/.env
+ExecStart=/usr/bin/node -r dotenv/config dist/authoring-server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+
+```bash
+sudo systemctl enable taleshed-authoring
+sudo systemctl start taleshed-authoring
+```
+
+Restart only the authoring app with `sudo systemctl restart taleshed-authoring`, or both with `sudo systemctl restart taleshed taleshed-authoring`.

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TaleShed — Authoring</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>TaleShed Authoring</h1>
+    <p class="subtitle" id="subtitle">Double-click empty space to add a room; drag rooms to move (exits stay connected); drag empty space to pan.</p>
+    <div id="api-warn" class="api-warn hidden">Add <code>?api=YOUR_KEY</code> to the URL to load data.</div>
+  </header>
+  <main class="main-content">
+    <div id="panel-world-graph" class="panel active">
+      <div id="grid-wrap" class="grid-wrap">
+        <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
+        <div id="locations-layer" class="locations-layer"></div>
+      </div>
+    </div>
+    <div id="panel-history" class="panel">
+      <div class="list-toolbar">
+        <button type="button" class="btn btn-add" id="history-add">Add entry</button>
+      </div>
+      <div class="list-wrap">
+        <table class="data-table" id="history-table">
+          <thead><tr><th>entry_id</th><th>timestamp</th><th>action_description</th><th>node_id</th><th>prose_impact</th><th>system_event</th><th></th></tr></thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="panel-vocabulary" class="panel">
+      <div class="list-toolbar">
+        <button type="button" class="btn btn-add" id="vocab-add">Add term</button>
+      </div>
+      <div class="list-wrap">
+        <table class="data-table" id="vocab-table">
+          <thead><tr><th>adjective</th><th>rule_description</th><th>is_starter</th><th></th></tr></thead>
+          <tbody id="vocab-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="panel-nodes" class="panel">
+      <div class="list-toolbar">
+        <button type="button" class="btn btn-add" id="nodes-add">Add node</button>
+      </div>
+      <div class="list-wrap">
+        <table class="data-table" id="nodes-table">
+          <thead><tr><th>node_id</th><th>node_type</th><th>name</th><th>location_id</th><th>is_active</th><th></th></tr></thead>
+          <tbody id="nodes-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+  <nav class="bottom-nav" aria-label="Authoring sections">
+    <button type="button" class="nav-btn active" data-panel="panel-world-graph">World Graph</button>
+    <button type="button" class="nav-btn" data-panel="panel-history">History Ledger</button>
+    <button type="button" class="nav-btn" data-panel="panel-vocabulary">Vocabulary</button>
+    <button type="button" class="nav-btn" data-panel="panel-nodes">Nodes</button>
+  </nav>
+  <div id="modal-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+  <div id="modal" class="modal hidden" role="dialog" aria-labelledby="modal-title" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="modal-title">Edit location</h2>
+      <button type="button" class="btn-close" id="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <form id="modal-form" class="modal-form">
+      <input type="hidden" id="edit-node_id" name="node_id" />
+      <div class="field">
+        <label for="edit-node_id_ro">node_id</label>
+        <input type="text" id="edit-node_id_ro" readonly class="readonly" />
+      </div>
+      <div class="field">
+        <label for="edit-node_type">node_type</label>
+        <select id="edit-node_type" name="node_type">
+          <option value="location">location</option>
+          <option value="object">object</option>
+          <option value="npc">npc</option>
+          <option value="player">player</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="edit-name">name</label>
+        <input type="text" id="edit-name" name="name" required />
+      </div>
+      <div class="field">
+        <label for="edit-base_description">base_description</label>
+        <textarea id="edit-base_description" name="base_description" rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label for="edit-adjectives">adjectives (JSON array)</label>
+        <input type="text" id="edit-adjectives" name="adjectives" placeholder='["dark","lit"]' />
+      </div>
+      <div class="field">
+        <label for="edit-location_id">location_id</label>
+        <input type="text" id="edit-location_id" name="location_id" placeholder="node_id of container or null" />
+      </div>
+      <div class="field row">
+        <label><input type="checkbox" id="edit-is_active" name="is_active" checked /> is_active</label>
+      </div>
+      <div class="field">
+        <label for="edit-meta">meta</label>
+        <input type="text" id="edit-meta" name="meta" />
+      </div>
+      <div class="field">
+        <label for="edit-grid_x">grid_x</label>
+        <input type="number" id="edit-grid_x" name="grid_x" step="1" placeholder="0" />
+      </div>
+      <div class="field">
+        <label for="edit-grid_y">grid_y</label>
+        <input type="number" id="edit-grid_y" name="grid_y" step="1" placeholder="0" />
+      </div>
+      <div class="field">
+        <label>exits (JSON: [{ "label", "target", "direction": "north"|"south"|"east"|"west" }])</label>
+        <textarea id="edit-exits" name="exits" rows="4" placeholder='[{"label":"door","target":"kitchen","direction":"east"}]'></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-save">Save</button>
+        <button type="button" class="btn btn-delete" id="modal-delete">Delete</button>
+        <button type="button" class="btn btn-cancel" id="modal-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <div id="modal-history-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+  <div id="modal-history" class="modal hidden" role="dialog" aria-labelledby="modal-history-title" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="modal-history-title">Edit history entry</h2>
+      <button type="button" class="btn-close modal-history-close" aria-label="Close">&times;</button>
+    </div>
+    <form id="form-history" class="modal-form">
+      <input type="hidden" id="history-entry_id" name="entry_id" />
+      <div class="field"><label for="history-timestamp">timestamp</label><input type="text" id="history-timestamp" name="timestamp" required /></div>
+      <div class="field"><label for="history-action_description">action_description</label><input type="text" id="history-action_description" name="action_description" /></div>
+      <div class="field"><label for="history-node_id">node_id</label><input type="text" id="history-node_id" name="node_id" /></div>
+      <div class="field"><label for="history-prose_impact">prose_impact</label><textarea id="history-prose_impact" name="prose_impact" rows="2"></textarea></div>
+      <div class="field"><label for="history-adjectives_old">adjectives_old</label><input type="text" id="history-adjectives_old" name="adjectives_old" /></div>
+      <div class="field"><label for="history-adjectives_new">adjectives_new</label><input type="text" id="history-adjectives_new" name="adjectives_new" /></div>
+      <div class="field"><label for="history-system_event">system_event</label><input type="text" id="history-system_event" name="system_event" /></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-save">Save</button>
+        <button type="button" class="btn btn-delete" id="history-delete">Delete</button>
+        <button type="button" class="btn btn-cancel modal-history-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <div id="modal-vocab-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+  <div id="modal-vocab" class="modal hidden" role="dialog" aria-labelledby="modal-vocab-title" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="modal-vocab-title">Edit vocabulary</h2>
+      <button type="button" class="btn-close modal-vocab-close" aria-label="Close">&times;</button>
+    </div>
+    <form id="form-vocab" class="modal-form">
+      <input type="hidden" id="vocab-adjective-old" name="adjective_old" />
+      <div class="field"><label for="vocab-adjective">adjective</label><input type="text" id="vocab-adjective" name="adjective" required /></div>
+      <div class="field"><label for="vocab-rule_description">rule_description</label><textarea id="vocab-rule_description" name="rule_description" rows="3"></textarea></div>
+      <div class="field row"><label><input type="checkbox" id="vocab-is_starter" name="is_starter" /> is_starter</label></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-save">Save</button>
+        <button type="button" class="btn btn-delete" id="vocab-delete">Delete</button>
+        <button type="button" class="btn btn-cancel modal-vocab-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -12,7 +12,8 @@
     "start:stdio": "node dist/index.js",
     "dev": "tsc && node dist/http.js",
     "seed": "node dist/seed.js",
-    "db:init": "node dist/db/init.js"
+    "db:init": "node dist/db/init.js",
+    "start:authoring": "node -r dotenv/config dist/authoring-server.js"
   },
   "engines": {
     "node": ">=18"
@@ -21,10 +22,12 @@
     "@modelcontextprotocol/sdk": "^1.27.0",
     "better-sqlite3": "^11.6.0",
     "dotenv": "^16.4.5",
+    "express": "^4.21.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^4.17.21",
     "typescript": "^5.6.0"
   }
 }

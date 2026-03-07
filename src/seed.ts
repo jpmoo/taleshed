@@ -36,16 +36,16 @@ function seedWorld(): void {
     return;
   }
 
-  const scriptoriumExits = JSON.stringify([{ label: "battered door", target: "kitchen" }]);
-  const kitchenExits = JSON.stringify([{ label: "battered door", target: "scriptorium" }]);
+  const scriptoriumExits = JSON.stringify([{ label: "battered door", target: "kitchen", direction: "east" }]);
+  const kitchenExits = JSON.stringify([{ label: "battered door", target: "scriptorium", direction: "west" }]);
   db.exec(`
-    INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits)
+    INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y)
     VALUES
-      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}'),
-      ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A fire burns in the hearth, casting flickering light.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}'),
-      ('torch_01', 'object', 'The Torch', 'Dry tow wrapped tight around a wooden handle, waiting for a spark. Unlit. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]'),
-      ('ciaran', 'npc', 'Brother Ciarán', 'A monk at a desk, copying a manuscript.', '["guarded"]', 'scriptorium', 1, NULL, '[]'),
-      ('player', 'player', 'Player', 'You.', '[]', 'scriptorium', 1, NULL, '[]');
+      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0),
+      ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A fire burns in the hearth, casting flickering light.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}', 1, 0),
+      ('torch_01', 'object', 'The Torch', 'Dry tow wrapped tight around a wooden handle, waiting for a spark. Unlit. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
+      ('ciaran', 'npc', 'Brother Ciarán', 'A monk at a desk, copying a manuscript.', '["guarded"]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
+      ('player', 'player', 'Player', 'You.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL);
   `);
   console.log("Inserted sample world: scriptorium (exit to kitchen), kitchen (fire), torch_01 (takeable), ciaran, player.");
 }

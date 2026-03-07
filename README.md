@@ -92,6 +92,24 @@ Configure the client with the command to run, e.g. `node /path/to/taleshed/dist/
 
 If Streamable HTTP gives you trouble (e.g. connection or proxy issues), run with **SSE** instead: `npm run start:sse` and point the client at `http://localhost:3000/sse`; the client must then POST to `/messages?sessionId=...` using the session ID from the SSE `endpoint` event.
 
+## Authoring web app (world graph)
+
+A graph-paper style editor for the world graph: locations are 5×5 squares; exits are 2-block lines (N/S/E/W). Requires an API key in the URL.
+
+```bash
+npm run start:authoring
+```
+
+Open **http://localhost:8043/?api=YOUR_KEY** (port defaults to MCP port + 1). Set in `.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TALESHED_WEB_IP` | `0.0.0.0` | Bind address for the authoring server. |
+| `TALESHED_WEB_PORT` | MCP port + 1 (e.g. 8043) | Authoring server port. |
+| `TALESHED_WEB_API_KEY` | (required) | Secret key; must be passed as `?api=KEY` in the URL (or `X-API-Key` header for API calls). |
+
+Click a location to edit all fields in a modal; Save updates, Delete removes the node (with confirmation). Exits use JSON: `[{ "label", "target", "direction": "north"|"south"|"east"|"west" }]`. Use `grid_x` and `grid_y` to place locations on the grid.
+
 ## Spec reference
 
 See `TaleShed_MCP_Spec_v0.1.pdf` in this repo for full data model, turn pipeline, Ollama prompt structure, and error handling.
