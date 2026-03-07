@@ -88,17 +88,18 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - Do not invent any object not in ENTITIES PRESENT. No poker, trapdoor, seam in the floor, or other props unless they appear in the list. If the kitchen (or any location) has no object entities listed, there are no takeable or notable objects there beyond what the location description states.
 - If the scene lists no exits, this location has no exits. Never describe or imply a door, corridor, or room that is not in the entity list.
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", or antechamber. If the player goes through the door, they go to the destination in the EXITS list (e.g. battered door -> kitchen). Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
-- When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's target. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Otherwise the engine will not move the player.
+- When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's target. Use the exact target node_id from EXITS (e.g. kitchen), not a phrase like "the kitchen" or "The Kitchen"—the engine only accepts node_ids that exist. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Otherwise the engine will not move the player.
 - In narrative_prose, when describing the current location, tell the player the direction of each exit (e.g. "To the east, a battered door leads to the kitchen") so they can say "go east" or "east" to move.
 - You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn; if unchanged, set both to the same array. Never omit an entry or leave adjectives blank for a node that has adjectives.
 - You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
-PLAYER INVENTORY IS EXHAUSTIVE: The player has only the items listed in Inventory. Do not have them produce, pull from a belt, or use flint and steel, keys, or any tool not in that list. If Inventory is [], the player has nothing.
+PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
 When writing narrative_prose:
 - Describe the location/room first, then who is here (only NPCs from the list, by name), then notable objects (only objects from the list). Every NPC in ENTITIES PRESENT must be mentioned; never add extra people.
-- "Take" or "pick up" means only that: the object is now in the player's possession. Do NOT also light, ignite, or use the object. If the player says only "take the torch", the torch ends up in hand but still unlit. Do not describe lighting it unless the player explicitly says they light it (and has a means in Inventory).
-- Only describe outcomes that follow from the player's actual action. Do not have objects change state (unlit→lit, etc.) unless the player's command explicitly causes it and they have the means. If the player "takes" something not in ENTITIES PRESENT, the action fails.`;
+- Do only what the user asked. Do not take extra actions on any item or object unless the user explicitly says to. If the user says "take X", only add X to inventory—do not also use it, light it, activate it, or otherwise change its state unless the user explicitly asks for that. If the user says "take X and go through door", do exactly those two things and nothing more.
+- An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
+- If the player tries to take or use something not in ENTITIES PRESENT, the action fails.`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -155,7 +156,7 @@ Check: does the recent narration describe anything inconsistent with the current
 function buildSectionE(playerCommand: string, locationExits: { label: string; target: string; direction?: string }[]): string {
   const exitLine =
     locationExits.length > 0
-      ? `\nIf the player goes through a door/exit or says a direction (e.g. "east", "go north"), set node_impacts entry for node_id "player" with new_location_id to that exit's target. Match "east"/"go east" to the exit that has direction east, etc. Example: "east: battered door -> kitchen" means new_location_id "kitchen" when the player says "east" or "go through the door". Without this the player will not move.\n`
+      ? `\nIf the player goes through a door/exit or says a direction (e.g. "east", "go north"), set node_impacts entry for node_id "player" with new_location_id set to the exact target from EXITS (e.g. "kitchen" not "the kitchen"). Match "east"/"go east" to the exit that has direction east. Without this the player will not move.\n`
       : "";
   return `PLAYER ACTION: ${playerCommand}
 ${exitLine}

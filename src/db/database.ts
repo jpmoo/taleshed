@@ -19,6 +19,23 @@ export function getLocation(db: Database.Database, locationId: string): WorldNod
   return getNode(db, locationId);
 }
 
+/** Resolve a location by exact node_id or by case-insensitive node_id/name (e.g. "the kitchen" -> kitchen). Returns canonical node_id or null. */
+export function resolveLocationNodeId(db: Database.Database, idOrName: string): string | null {
+  const trimmed = (idOrName ?? "").trim();
+  if (!trimmed) return null;
+  const node = getNode(db, trimmed);
+  if (node) return node.node_id;
+  const lower = trimmed.toLowerCase();
+  const locations = db
+    .prepare("SELECT node_id, name FROM world_graph WHERE node_type = 'location' AND is_active = 1")
+    .all() as { node_id: string; name: string }[];
+  for (const loc of locations) {
+    if (loc.node_id.toLowerCase() === lower) return loc.node_id;
+    if (loc.name && loc.name.toLowerCase() === lower) return loc.node_id;
+  }
+  return null;
+}
+
 export function getEntitiesInLocation(db: Database.Database, locationId: string): WorldNode[] {
   return db
     .prepare("SELECT * FROM world_graph WHERE location_id = ? AND is_active = 1")

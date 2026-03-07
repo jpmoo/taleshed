@@ -15,6 +15,7 @@ import {
   updateWorldGraphAdjectives,
   updateWorldGraphLocation,
   insertVocabulary,
+  resolveLocationNodeId,
 } from "./db/database.js";
 import type { WorldNode } from "./db/schema.js";
 import {
@@ -273,14 +274,14 @@ export async function takeTurn(
           updateWorldGraphAdjectives(db, node_id, newJson);
         }
         if (entry.new_location_id != null) {
-          const newLocId = String(entry.new_location_id).trim();
-          const targetNode = getNode(db, newLocId);
-          if (!targetNode) {
+          const raw = String(entry.new_location_id).trim();
+          const resolvedId = getNode(db, raw) ? raw : resolveLocationNodeId(db, raw);
+          if (!resolvedId) {
             console.warn(
-              `[TaleShed] Ignoring new_location_id "${newLocId}" for ${node_id}: no such node in world_graph (model may have invented a location).`
+              `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: no such location in world_graph (model may have invented a location).`
             );
           } else {
-            updateWorldGraphLocation(db, node_id, newLocId);
+            updateWorldGraphLocation(db, node_id, resolvedId);
           }
         }
       }
