@@ -104,7 +104,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
 ${vocabJson}
 
 When assigning adjectives to nodes, use existing vocabulary terms where possible.
-If no existing term fits, invent a new adjective and include it in new_adjectives.`;
+When the player's action causes a new state that has no existing vocabulary term, you MUST add it to new_adjectives so the engine can track it (e.g. something becomes lit, broken, open, wet, locked, extinguished — add {"adjective": "<word>", "rule_description": "<brief rule>"} for each such new term). new_adjectives may be [] only when nothing new is introduced; otherwise include every new state word you use in node_impacts.`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
@@ -163,10 +163,7 @@ Return ONLY this JSON structure:
     }
   ],
   "new_adjectives": [
-    {
-      "adjective": "<string>",
-      "rule_description": "<string>"
-    }
+    {"adjective": "<lowercase word>", "rule_description": "<one sentence rule for this state>"}
   ],
   "reconciliation_notes": "<string | null: any inconsistencies found between recent narration and world state>"
 }`;

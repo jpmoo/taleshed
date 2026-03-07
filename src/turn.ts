@@ -259,9 +259,12 @@ export async function takeTurn(
           updateWorldGraphLocation(db, node_id, entry.new_location_id);
         }
       }
-      for (const na of mistralResponse.new_adjectives ?? []) {
-        if (na?.adjective && na?.rule_description) {
-          insertVocabulary(db, na.adjective, na.rule_description, 0);
+      const newAdjs = Array.isArray(mistralResponse.new_adjectives) ? mistralResponse.new_adjectives : [];
+      for (const na of newAdjs) {
+        const adj = na && typeof na === "object" && typeof (na as { adjective?: unknown }).adjective === "string" ? (na as { adjective: string; rule_description?: string }).adjective.trim() : "";
+        const rule = na && typeof na === "object" && typeof (na as { rule_description?: unknown }).rule_description === "string" ? (na as { rule_description: string }).rule_description.trim() : "";
+        if (adj) {
+          insertVocabulary(db, adj, rule || "(No description)", 0);
         }
       }
     })();
