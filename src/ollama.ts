@@ -96,7 +96,7 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inventory. The location and ENTITIES PRESENT are the only sources of tools, fire, light, or other means. Do not have the player use or produce anything not in Inventory or the scene (no pulling flint from a pocket, no "you find a way", no invented fire source).
 
 When writing narrative_prose:
-- Describe the location/room first, then who is here (only NPCs from the list, by name), then notable objects (only objects from the list). Every NPC in ENTITIES PRESENT must be mentioned; never add extra people.
+- Describe the location/room first, then who is here (NPCs from the list, by name), then objects (from the list). Every entity in ENTITIES PRESENT must be mentioned—every NPC and every object. Never add extra people or omit a listed object.
 - Do only what the user asked. Do not take extra actions on any item or object unless the user explicitly says to. If the user says "take X", only add X to inventory—do not also use it, light it, activate it, or otherwise change its state unless the user explicitly asks for that. If the user says "take X and go through door", do exactly those two things and nothing more.
 - An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
 - If the player tries to take or use something not in ENTITIES PRESENT, the action fails.`;
