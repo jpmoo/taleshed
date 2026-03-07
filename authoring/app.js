@@ -69,6 +69,10 @@
         locations = rows.filter((n) => n.node_type === "location");
         computeLayoutFromExits();
         render();
+        setTimeout(function () {
+          applyZoom();
+          centerMapScrollAfterLayout();
+        }, 200);
         var nodesPanel = document.getElementById("panel-nodes");
         if (nodesPanel && nodesPanel.classList.contains("active")) renderNodes();
       })
@@ -304,6 +308,7 @@
   function centerMapScroll() {
     const wrap = document.getElementById("grid-wrap");
     if (!wrap) return;
+    wrap.offsetHeight;
     const maxScrollLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
     const maxScrollTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
     wrap.scrollLeft = maxScrollLeft * 0.5;
@@ -318,6 +323,7 @@
       run();
       requestAnimationFrame(run);
       setTimeout(run, 50);
+      setTimeout(run, 150);
     });
   }
 
@@ -340,13 +346,14 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
+      var cw = sw;
+      var ch = sh;
       if (wrapW > 0 && wrapH > 0) {
-        canvas.style.width = Math.max(wrapW, sw) + "px";
-        canvas.style.height = Math.max(wrapH, sh) + "px";
-      } else {
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
+        cw = Math.max(wrapW, sw);
+        ch = Math.max(wrapH, sh);
       }
+      canvas.style.width = Math.max(1, cw) + "px";
+      canvas.style.height = Math.max(1, ch) + "px";
     }
   }
 
