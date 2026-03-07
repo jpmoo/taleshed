@@ -525,14 +525,14 @@
   setupPanAndDrag();
   (function () {
     const checkbox = document.getElementById("show-locations");
-    const gridWrap = document.getElementById("grid-wrap");
-    if (checkbox && gridWrap) {
-      function applyShowLocations() {
-        if (checkbox.checked) gridWrap.classList.remove("locations-hidden");
-        else gridWrap.classList.add("locations-hidden");
+    const nodesPanel = document.getElementById("panel-nodes");
+    if (checkbox && nodesPanel) {
+      function applyShowLocationsInNodes() {
+        if (checkbox.checked) nodesPanel.classList.remove("nodes-hide-locations");
+        else nodesPanel.classList.add("nodes-hide-locations");
       }
-      checkbox.addEventListener("change", applyShowLocations);
-      applyShowLocations();
+      checkbox.addEventListener("change", applyShowLocationsInNodes);
+      applyShowLocationsInNodes();
     }
   })();
   fetchGraph();
@@ -742,6 +742,7 @@
     tbody.innerHTML = "";
     allNodes.forEach((row) => {
       const tr = document.createElement("tr");
+      tr.className = row.node_type === "location" ? "node-row node-row-location" : "node-row";
       tr.innerHTML =
         "<td>" +
         escapeHtml(row.node_id) +

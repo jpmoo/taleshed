@@ -46,9 +46,9 @@ function seedWorld(): void {
   db.exec(`
     INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y)
     VALUES
-      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0),
+      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket holds an unlit torch. Without a lit flame the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0),
       ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A fire burns in the hearth, casting flickering light.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}', 1, 0),
-      ('torch_01', 'object', 'The Torch', 'Dry tow wrapped tight around a wooden handle, waiting for a spark. Unlit. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
+      ('torch_01', 'object', 'The Torch', 'The unlit torch in the bracket — dry tow wrapped tight around a wooden handle, waiting for a spark. It can be taken.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
       ('ciaran', 'npc', 'Brother Ciarán', 'A monk at a desk, copying a manuscript.', '["guarded"]', 'scriptorium', 1, NULL, '[]', NULL, NULL),
       ('player', 'player', 'Player', 'You.', '[]', 'scriptorium', 1, NULL, '[]', NULL, NULL);
   `);

@@ -167,7 +167,7 @@ body {
   cursor: pointer;
 }
 .toolbar-option input { width: auto; }
-.grid-wrap.locations-hidden .location-box { display: none; }
+#panel-nodes.nodes-hide-locations .node-row-location { display: none; }
 .grid-wrap {
   position: relative;
   padding: 2rem;
