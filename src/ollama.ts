@@ -86,7 +86,8 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - Do not invent any object not in ENTITIES PRESENT. No poker, trapdoor, seam in the floor, or other props unless they appear in the list. If the kitchen (or any location) has no object entities listed, there are no takeable or notable objects there beyond what the location description states.
 - If the scene lists no exits, this location has no exits. Never describe or imply a door, corridor, or room that is not in the entity list.
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", or antechamber. If the player goes through the door, they go to the destination in the EXITS list (e.g. battered door -> kitchen). Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
-- You may add atmospheric room detail (brazier, shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Invented details are set-dressing only.
+- When the player goes through an exit (e.g. "go through the door", "east", "leave"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to that exit's destination (the target from EXITS FROM THIS LOCATION). Otherwise the engine will not move the player.
+- You may add atmospheric room detail (shelves, curtain, etc.) for color, but such details are not manipulable: the player cannot take, use, or interact with anything that is not in ENTITIES PRESENT. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Invented details are set-dressing only.
 
 PLAYER INVENTORY IS EXHAUSTIVE: The player has only the items listed in Inventory. Do not have them produce, pull from a belt, or use flint and steel, keys, or any tool not in that list. If Inventory is [], the player has nothing.
 
@@ -146,9 +147,13 @@ ${recentHistory || "(none)"}
 Check: does the recent narration describe anything inconsistent with the current world state above? If so, note corrections in your response.`;
 }
 
-function buildSectionE(playerCommand: string): string {
+function buildSectionE(playerCommand: string, locationExits: { label: string; target: string }[]): string {
+  const exitLine =
+    locationExits.length > 0
+      ? `\nIf the player goes through a door or exit (or asks to go to another place), you MUST include in node_impacts an entry with node_id "player" and new_location_id set to that exit's destination (the target from EXITS FROM THIS LOCATION). Example: for "battered door -> kitchen" set new_location_id to "kitchen". Without this the player will not move.\n`
+      : "";
   return `PLAYER ACTION: ${playerCommand}
-
+${exitLine}
 Return ONLY this JSON structure:
 {
   "narrative_prose": "<string: prose description of what happened, for Claude to use>",
@@ -159,7 +164,7 @@ Return ONLY this JSON structure:
       "prose_impact": "<string: what this node experienced>",
       "adjectives_old": ["<string>"],
       "adjectives_new": ["<string>"],
-      "new_location_id": "<optional: \"player_inventory\" when player takes an object; a location node_id when player moves (use node_id \"player\" with new_location_id = destination); omit if no move>"
+      "new_location_id": "<optional: \"player_inventory\" when player takes an object; when player goes through an exit MUST be the exit destination node_id (e.g. \"kitchen\"); omit only if no move>"
     }
   ],
   "new_adjectives": [
@@ -175,7 +180,7 @@ export function assemblePrompt(ctx: SceneContext, playerCommand: string, recentH
     buildSectionB(ctx.vocabulary),
     buildSectionC(ctx),
     buildSectionD(recentHistory),
-    buildSectionE(playerCommand),
+    buildSectionE(playerCommand, ctx.locationExits ?? []),
   ];
   return sections.join("\n\n");
 }
