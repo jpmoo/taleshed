@@ -113,7 +113,7 @@ CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
 - For any object: taking it does not imply using it. Using, lighting, activating, opening, or otherwise changing an object's state requires an explicit player command for that action. One verb = one action. "Take torch and go through door" = take (inventory) + move; the torch is still unlit unless the player also said to light it.
 - If the player's command has multiple parts (e.g. "take X and go through door"), perform exactly those parts and no others. Do not add a third action (e.g. lighting the torch) because it would be "helpful" or "realistic"—only the player can request that.
 
-- An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). Do not allow outcomes that inventory, room, or entities would not support.
+- An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory, the room (location), or entities (ENTITIES PRESENT). The location's description is part of the room: if it states there is fire, light, or a tool (e.g. "A fire burns in the hearth" in the kitchen), the player may use it (e.g. light the torch at the kitchen fire). Do not allow outcomes that inventory, room, or entities would not support.
 - If the player tries to take, use, talk to, destroy, or move something (or someone) not in ENTITIES PRESENT and not in Inventory, the action fails—unless the action is scenery-only (e.g. sit on the bench, lean on the wall), in which case allow it with no node impact (or only a player adjective). The target is not in the room; do not narrate success or bring that person or object into the scene.`;
 }
 
