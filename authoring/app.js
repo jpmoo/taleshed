@@ -26,7 +26,6 @@
 
   let allNodes = [];
   let locations = [];
-  let skipNextClick = false;
 
   /* 3D scene */
   let scene3D = null;
@@ -42,7 +41,8 @@
   let cameraPitch = 0.2;
   const CAMERA_DIST_MIN = 20;
   const CAMERA_DIST_MAX = 400;
-  let stoneTextureCache = null; /* disposed when scene is rebuilt */
+  let compassRose = null; /* 3D compass group; position updated each frame */
+  let sceneDirectionalLight = null; /* light position follows player location */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
   const keysPressed = Object.create(null);
   const PAN_SPEED = 1.5;
@@ -332,13 +332,86 @@
     renderer3D = new THREE.WebGLRenderer({ canvas: canvas3D, antialias: true });
     renderer3D.setPixelRatio(window.devicePixelRatio || 1);
     renderer3D.setSize(wrap.clientWidth, wrap.clientHeight);
-    /* point light from camera side */
-    const light = new THREE.DirectionalLight(0xffffff, 0.9);
-    light.position.set(20, 40, 30);
-    scene3D.add(light);
+    /* directional light follows player; position updated each frame in animate() */
+    sceneDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    sceneDirectionalLight.position.set(0, 25, 15);
+    scene3D.add(sceneDirectionalLight);
+    scene3D.add(sceneDirectionalLight.target);
     scene3D.add(new THREE.AmbientLight(0x404060, 0.5));
+    compassRose = createCompassRose();
+    if (compassRose) scene3D.add(compassRose);
     updateCameraPosition();
     setup3DControls();
+  }
+
+  function makeCompassLabelTexture(text) {
+    var w = 128;
+    var h = 64;
+    var canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(230, 230, 230, 0.95)";
+    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, w / 2, h / 2);
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function createCompassRose() {
+    if (typeof THREE === "undefined") return null;
+    var group = new THREE.Group();
+    var ringRadius = 12;
+    var ringTube = 0.2;
+    var ringGeo = new THREE.TorusGeometry(ringRadius, ringTube, 8, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    var ringMat = new THREE.MeshBasicMaterial({ color: 0x606070 });
+    var ring = new THREE.Mesh(ringGeo, ringMat);
+    group.add(ring);
+    var labelW = 2.5;
+    var labelH = 1.2;
+    var labelGeo = new THREE.PlaneGeometry(labelW, labelH);
+    var cards = [
+      { text: "N", x: 0, y: 0, z: -ringRadius, rotY: Math.PI },
+      { text: "E", x: ringRadius, y: 0, z: 0, rotY: -Math.PI / 2 },
+      { text: "S", x: 0, y: 0, z: ringRadius, rotY: 0 },
+      { text: "W", x: -ringRadius, y: 0, z: 0, rotY: Math.PI / 2 },
+    ];
+    cards.forEach(function (c) {
+      var tex = makeCompassLabelTexture(c.text);
+      var mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      var plane = new THREE.Mesh(labelGeo.clone(), mat);
+      plane.position.set(c.x, c.y, c.z);
+      plane.rotation.y = c.rotY;
+      group.add(plane);
+    });
+    var vertLabels = [
+      { text: "Up", x: 0, y: 14, z: 0, rotX: -Math.PI / 2 },
+      { text: "Down", x: 0, y: -14, z: 0, rotX: Math.PI / 2 },
+    ];
+    vertLabels.forEach(function (c) {
+      var tex = makeCompassLabelTexture(c.text);
+      var mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      var plane = new THREE.Mesh(labelGeo.clone(), mat);
+      plane.position.set(c.x, c.y, c.z);
+      plane.rotation.x = c.rotX;
+      group.add(plane);
+    });
+    return group;
   }
 
   function updateCameraPosition() {
@@ -359,15 +432,14 @@
     return "rgb(" + r + "," + g + "," + b + ")";
   }
 
-  function makeFaceLabelTexture(shortName, bgHex) {
+  function makeFaceLabelTexture(shortName) {
     var w = 256;
     var h = 64;
     var canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
     var ctx = canvas.getContext("2d");
-    ctx.fillStyle = hexToCss(bgHex);
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#1a1a1a";
     ctx.font = "bold 24px system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -385,14 +457,14 @@
   var LOWEST_ROW_CENTER = -HALF + LABEL_STRIP_H / 2;
 
   function addFaceLabelsForLocation(scene, gx, gy, gz, nodeId, fullName, isPlayer) {
-    var bgHex = isPlayer ? "66bb6a" : "e8e4d8";
     var labelText = String(nodeId).slice(0, 12);
-    var tex = makeFaceLabelTexture(labelText, bgHex);
+    var tex = makeFaceLabelTexture(labelText);
     var mat = new THREE.MeshBasicMaterial({
       map: tex,
-      transparent: false,
+      transparent: true,
+      opacity: 1,
       side: THREE.DoubleSide,
-      depthWrite: true,
+      depthWrite: false,
     });
     var geo = new THREE.PlaneGeometry(LABEL_STRIP_W, LABEL_STRIP_H);
     var faces = [
@@ -413,35 +485,6 @@
     }
   }
 
-  function makeStoneBlockTexture() {
-    var size = 128;
-    var block = 16;
-    var mortar = 2;
-    var canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    var ctx = canvas.getContext("2d");
-    var base = 0.92;
-    var mortarGray = 0.55;
-    for (var by = 0; by < size; by += block + mortar) {
-      for (var bx = 0; bx < size; bx += block + mortar) {
-        var v = base + (Math.random() - 0.5) * 0.12;
-        v = Math.max(0.7, Math.min(1, v));
-        var g = Math.round(v * 255);
-        ctx.fillStyle = "rgb(" + g + "," + g + "," + g + ")";
-        ctx.fillRect(bx, by, block, block);
-      }
-    }
-    ctx.fillStyle = "rgb(" + Math.round(mortarGray * 255) + "," + Math.round(mortarGray * 255) + "," + Math.round(mortarGray * 255) + ")";
-    for (var x = 0; x <= size; x += block + mortar) ctx.fillRect(x, 0, mortar, size);
-    for (var y = 0; y <= size; y += block + mortar) ctx.fillRect(0, y, size, mortar);
-    var tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(3, 3);
-    tex.needsUpdate = true;
-    return tex;
-  }
-
   function buildScene3D() {
     if (!scene3D || typeof THREE === "undefined") return;
     locationMeshes.forEach(function (o) {
@@ -454,10 +497,6 @@
       m.geometry.dispose();
       if (m.material) m.material.dispose();
     });
-    if (stoneTextureCache) {
-      stoneTextureCache.dispose();
-      stoneTextureCache = null;
-    }
     var disposedMats = new Set();
     labelMeshes.forEach(function (m) {
       scene3D.remove(m);
@@ -476,21 +515,17 @@
     const playerLocationId = (playerNode && playerNode.location_id) || null;
     const boxGeo = new THREE.BoxGeometry(LOCATION_SIZE, LOCATION_SIZE, LOCATION_SIZE);
     const tunnelGeo = new THREE.BoxGeometry(TUNNEL_CROSS, TUNNEL_CROSS, TUNNEL_LENGTH);
-    stoneTextureCache = makeStoneBlockTexture();
     const matDefault = new THREE.MeshPhongMaterial({
       color: 0xe8e4d8,
       emissive: 0x2a2a28,
-      map: stoneTextureCache,
     });
     const matCurrent = new THREE.MeshPhongMaterial({
       color: 0x66bb6a,
       emissive: 0x1a331a,
-      map: stoneTextureCache,
     });
     const matTunnel = new THREE.MeshPhongMaterial({
       color: 0x9a9a9a,
       emissive: 0x222222,
-      map: stoneTextureCache,
     });
 
     locations.forEach(function (loc) {
@@ -548,43 +583,6 @@
     updateCameraPosition();
   }
 
-  var WORLD_AXES = {
-    N: new THREE.Vector3(0, 0, -1),
-    S: new THREE.Vector3(0, 0, 1),
-    E: new THREE.Vector3(1, 0, 0),
-    W: new THREE.Vector3(-1, 0, 0),
-    Up: new THREE.Vector3(0, 1, 0),
-    Down: new THREE.Vector3(0, -1, 0),
-  };
-
-  function updateOrientationWidget() {
-    var el = document.getElementById("graph-orientation");
-    if (!el || !camera3D) return;
-    var w = el.offsetWidth;
-    var h = el.offsetHeight;
-    var cx = w / 2;
-    var cy = h / 2;
-    var radius = Math.min(w, h) * 0.38;
-    var cam = camera3D;
-    var camPos = cam.position.clone();
-    var v = new THREE.Vector3();
-    var ids = ["graph-orient-n", "graph-orient-s", "graph-orient-e", "graph-orient-w", "graph-orient-up", "graph-orient-down"];
-    var keys = ["N", "S", "E", "W", "Up", "Down"];
-    for (var i = 0; i < ids.length; i++) {
-      var label = document.getElementById(ids[i]);
-      if (!label) continue;
-      v.copy(camPos).add(WORLD_AXES[keys[i]]);
-      v.project(cam);
-      var nx = v.x;
-      var ny = -v.y;
-      var px = cx + nx * radius;
-      var py = cy + ny * radius;
-      label.style.left = px + "px";
-      label.style.top = py + "px";
-      label.style.transform = "translate(-50%, -50%)";
-    }
-  }
-
   function applyWasdPan() {
     if (!camera3D || !focusPoint) return;
     var el = document.activeElement;
@@ -611,8 +609,23 @@
   function animate() {
     if (!renderer3D || !scene3D || !camera3D) return;
     applyWasdPan();
+    if (compassRose) {
+      compassRose.position.set(focusPoint.x, focusPoint.y, focusPoint.z);
+    }
+    if (sceneDirectionalLight && locations && locations.length > 0) {
+      var playerNode = allNodes.find(function (n) { return n.node_id === "player"; });
+      var playerLocationId = (playerNode && playerNode.location_id) || null;
+      var playerLoc = locations.find(function (l) { return l.node_id === playerLocationId; });
+      if (playerLoc) {
+        var px = Number(playerLoc.grid_x) || 0;
+        var py = Number(playerLoc.grid_y) || 0;
+        var pz = Number(playerLoc.grid_z) || 0;
+        sceneDirectionalLight.position.set(px + 15, py + 25, pz + 15);
+        sceneDirectionalLight.target.position.set(px, py, pz);
+        sceneDirectionalLight.target.updateMatrixWorld(true);
+      }
+    }
     renderer3D.render(scene3D, camera3D);
-    updateOrientationWidget();
     animationId = requestAnimationFrame(animate);
   }
 
@@ -719,9 +732,8 @@
       if (tooltipEl) tooltipEl.classList.add("hidden");
     });
 
-    canvas.addEventListener("click", function (e) {
-      if (e.button !== 0 || dragState) return;
-      if (skipNextClick) { skipNextClick = false; return; }
+    canvas.addEventListener("dblclick", function (e) {
+      if (e.button !== 0) return;
       if (typeof THREE === "undefined" || !camera3D || !scene3D) return;
       const rect = canvas.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -778,7 +790,7 @@
 
   // --- Panel switching ---
   const SUBTITLES = {
-    "panel-world-graph": "3D world: left-drag orbit, right-drag pan, wheel zoom, W/A/S/D pan. Click location to edit; use Add location to create (add exits to place it).",
+    "panel-world-graph": "3D world: left-drag orbit, right-drag pan, wheel zoom, W/A/S/D pan. Double-click location to edit; use Add location to create (add exits to place it).",
     "panel-history": "History ledger entries. Edit, add, or delete (with confirmation).",
     "panel-vocabulary": "Vocabulary terms. Edit, add, or delete (with confirmation).",
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",

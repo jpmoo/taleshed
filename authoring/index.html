@@ -10,7 +10,7 @@
 <body>
   <header class="header">
     <h1>TaleShed Authoring</h1>
-    <p class="subtitle" id="subtitle">3D World Graph: Add location to create; click a location to edit. Player location is green.</p>
+    <p class="subtitle" id="subtitle">3D World Graph: Add location to create; double-click a location to edit. Player location is green.</p>
     <div id="api-warn" class="api-warn hidden">Add <code>?api=YOUR_KEY</code> to the URL to load data.</div>
   </header>
   <main class="main-content">
@@ -27,14 +27,6 @@
       <div id="grid-wrap" class="grid-wrap">
         <canvas id="world-graph-canvas" class="world-graph-canvas" aria-label="3D World Graph"></canvas>
         <div id="graph-tooltip" class="graph-tooltip hidden" aria-live="polite"></div>
-        <div id="graph-orientation" class="graph-orientation" aria-label="Orientation (world axes)">
-          <span id="graph-orient-up" class="graph-orient-label">Up</span>
-          <span id="graph-orient-n" class="graph-orient-label">N</span>
-          <span id="graph-orient-e" class="graph-orient-label">E</span>
-          <span id="graph-orient-s" class="graph-orient-label">S</span>
-          <span id="graph-orient-w" class="graph-orient-label">W</span>
-          <span id="graph-orient-down" class="graph-orient-label">Down</span>
-        </div>
       </div>
     </div>
     <div id="panel-history" class="panel">
