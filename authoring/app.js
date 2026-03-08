@@ -309,11 +309,11 @@
     wrap.offsetHeight; /* force reflow */
     const maxScrollLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
     const maxScrollTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
-    wrap.scrollLeft = maxScrollLeft * 0.5;
-    wrap.scrollTop = maxScrollTop * 0.5;
+    if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
+    if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
   }
 
-  /** Single entry: set zoom wrapper size, canvas size (viewport + PAN_MARGIN), then center scroll. */
+  /** Set zoom wrapper size, canvas size (at least viewport and content + PAN_MARGIN), then center scroll. */
   function applyZoom() {
     const wrap = document.getElementById("grid-wrap");
     const canvas = document.getElementById("grid-canvas");
@@ -333,13 +333,16 @@
     const w = wrap.clientWidth || 0;
     const h = wrap.clientHeight || 0;
     if (w < 1 || h < 1) return;
-    /* Canvas = viewport + margin so there is always scroll room; zoom wrapper is centered in canvas. */
-    const cw = w + PAN_MARGIN;
-    const ch = h + PAN_MARGIN;
+    /* Canvas must fit scaled content and have margin so scroll exists; zoom wrapper is centered in canvas. */
+    const cw = Math.max(w, sw) + PAN_MARGIN;
+    const ch = Math.max(h, sh) + PAN_MARGIN;
     canvas.style.width = cw + "px";
     canvas.style.height = ch + "px";
-    wrap.offsetHeight; /* reflow so scrollWidth/Height are correct */
-    centerMapScroll();
+    /* Set scroll to center the viewport on the canvas using the sizes we just set (no dependency on layout flush). */
+    const maxScrollLeft = Math.max(0, cw - w);
+    const maxScrollTop = Math.max(0, ch - h);
+    if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
+    if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
   }
 
   function setZoomPercent(value) {
