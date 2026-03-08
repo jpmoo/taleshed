@@ -332,6 +332,7 @@
 
   function applyZoom() {
     const wrap = document.getElementById("grid-wrap");
+    const canvasWrap = document.getElementById("grid-canvas-wrap");
     const canvas = document.getElementById("grid-canvas");
     const wrapper = document.getElementById("grid-zoom-wrapper");
     const content = document.getElementById("grid-content");
@@ -349,6 +350,14 @@
     if (wrap && canvas) {
       canvas.style.width = Math.max(1, sw) + "px";
       canvas.style.height = Math.max(1, sh) + "px";
+    }
+    if (wrap && canvasWrap) {
+      var w = wrap.clientWidth || 0;
+      var h = wrap.clientHeight || 0;
+      if (w > 0 && h > 0) {
+        canvasWrap.style.minWidth = w + "px";
+        canvasWrap.style.minHeight = h + "px";
+      }
     }
   }
 
