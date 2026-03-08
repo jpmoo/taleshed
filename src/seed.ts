@@ -51,7 +51,7 @@ function seedWorld(): void {
   db.exec(`
     INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z)
     VALUES
-      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '["dark"]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0, 0),
+      ('scriptorium', 'location', 'The Scriptorium', 'Against the near wall, a torch bracket. Without a lit torch the room depends on the grey light pressing weakly through the small windows. Parchment and ink line the desks. A battered door leads out.', '[]', NULL, 1, NULL, '${scriptoriumExits.replace(/'/g, "''")}', 0, 0, 0),
       ('kitchen', 'location', 'The Kitchen', 'A cramped kitchen. A battered door leads out.', '[]', NULL, 1, NULL, '${kitchenExits.replace(/'/g, "''")}', 8, 0, 0),
       ('bracket_01', 'object', 'The Torch Bracket', 'A wrought-iron bracket on the wall, made to hold a torch.', '["open"]', 'scriptorium', 1, NULL, '[]', NULL, NULL, NULL),
       ('torch_01', 'object', 'The Torch', 'An unlit torch: dry tow wrapped tight around a wooden handle, waiting for a spark. It can be taken or lit.', '[]', 'bracket_01', 1, NULL, '[]', NULL, NULL, NULL),
