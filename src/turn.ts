@@ -37,6 +37,14 @@ function isOfferOrQuestion(playerCommand: string): boolean {
   return /^\s*(offer to|may i\b|shall i\b|would you like me to|want me to|can i get you|I could\b|I can get you\b|how about i\b)/i.test(playerCommand.trim());
 }
 
+/** True if the player only asked to look/describe (no take, use, or move). */
+function isDescribeOnly(playerCommand: string): boolean {
+  const t = playerCommand.trim();
+  const lower = t.toLowerCase();
+  if (lower === "l" || lower === "x") return true;
+  return /^\s*(look|examine|start|begin)(\s+around|\s+at|\s+here)?\s*$/i.test(t);
+}
+
 const OLLAMA_UNREACHABLE_PROSE =
   "The world pauses, as if holding its breath. (Engine: Ollama unreachable. Please check the local model service.)";
 
@@ -356,6 +364,12 @@ export async function takeTurn(
   if (isOfferOrQuestion(playerCommand)) {
     for (const [, entry] of impactByNode) {
       entry.adjectives_new = [...entry.adjectives_old];
+      entry.new_location_id = undefined;
+    }
+  }
+  /* When the player only asked to look/describe, do not move any object or the player—even if the model had them take something. */
+  if (isDescribeOnly(playerCommand)) {
+    for (const [, entry] of impactByNode) {
       entry.new_location_id = undefined;
     }
   }
