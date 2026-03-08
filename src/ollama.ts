@@ -172,7 +172,7 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
   }
   const hasContainers = containedBy.size > 0;
   if (hasContainers) {
-    out += `\nCONTAINMENT RULE (mandatory): Entities above that show "contains: X" have X inside them. In narrative_prose you MUST state what is inside (e.g. "the bracket holds the torch", "an unlit torch sits in the bracket"). FORBIDDEN for those containers: "empty", "no torch rests in it", "waiting", "expectant", "nothing in it", "bare", "vacant". The "contains" field is authoritative—ignore any base_description that could suggest otherwise.\n`;
+    out += `\nCONTAINMENT RULE (mandatory): Entities above that show "contains: X" have X inside them. In narrative_prose you MUST state what is inside (e.g. "the bracket holds the torch", "an unlit torch sits in the bracket"). FORBIDDEN for those containers: "empty", "an empty bracket", "empty torch bracket", "no torch rests in it", "waiting", "waiting for flame", "expectant", "nothing in it", "bare", "vacant". Do not describe a container that has "contains:" as empty in any wording—state what is inside (e.g. "the bracket holds the torch"). Containers and their contents have separate descriptions: never apply the contained object's description or state to the container (e.g. do not give the bracket the torch's "dried tow" or "waiting for flame"), and never apply the container's description to the contents. Each entity is described only by its own line in ENTITIES PRESENT. The "contains" field is authoritative—ignore any base_description that could suggest otherwise.\n`;
   }
   out += `\nPLAYER:\n`;
   const playerAdj = Array.isArray(ctx.player.adjectives) ? ctx.player.adjectives : [];
