@@ -212,11 +212,11 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
-/* World graph: wrap is scroll container; canvas is always viewport + margin so scroll exists; zoom wrapper centered in canvas */
+/* World graph: wrap is scroll container; min-height 0 so it doesn't grow with canvas (allows vertical scroll). */
 .grid-wrap {
   position: relative;
   overflow: auto;
-  min-height: 100%;
+  min-height: 0;
   cursor: grab;
   background: var(--paper);
 }
