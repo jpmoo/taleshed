@@ -45,6 +45,56 @@ function isDescribeOnly(playerCommand: string): boolean {
   return /^\s*(look|examine|start|begin)(\s+around|\s+at|\s+here)?\s*$/i.test(t);
 }
 
+/** Standard phrase the model must use in narrative_prose when the player takes an object. Enables reliable detection and stripping when we negate a take. */
+export const TAKE_NARRATIVE_PHRASE = "The player now holds the";
+/** Standard prose_impact for a taken object's node_impacts entry. Use this exact string so logs are easy to scan. */
+export const TAKE_PROSE_IMPACT = "Taken by player.";
+
+/** True only when the player's command explicitly takes this object (e.g. "take torch", "get the torch"). Used to block model from moving objects to player when the player said something else. */
+function isTakeCommandForObject(playerCommand: string, nodeId: string, entityName?: string): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  const takeVerb =
+    /\b(take|get|grab|pick\s+up|carry)\b/.test(cmd) || /^\s*(take|get|grab|pick\s+up|carry)\s+/i.test(playerCommand.trim());
+  if (!takeVerb) return false;
+  const keywords: string[] = [];
+  const fromId = nodeId.replace(/_?\d*$/, "").toLowerCase();
+  if (fromId.length >= 2) keywords.push(fromId);
+  if (entityName && entityName.trim()) {
+    const name = entityName.trim().toLowerCase().replace(/^(the|a|an)\s+/, "");
+    const word = name.split(/\s+/)[0];
+    if (word.length >= 2 && !keywords.includes(word)) keywords.push(word);
+  }
+  if (keywords.length === 0) return false;
+  return keywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
+}
+
+/** Remove from narrative any phrase that says the player holds, carries, or took the given object (so returned prose is consistent with stripped object moves). */
+function sanitizeNarrativeStrippedTakes(
+  narrative: string,
+  strippedEntities: { node_id: string; name?: string }[]
+): string {
+  if (strippedEntities.length === 0) return narrative;
+  let out = narrative;
+  for (const e of strippedEntities) {
+    const kw = e.node_id.replace(/_?\d*$/, "").trim();
+    if (kw.length < 2) continue;
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const obj = `(?:unlit\\s+)?(?:an?\\s+)?(?:the\\s+)?${esc}`;
+    const patterns: RegExp[] = [
+      new RegExp(`\\s*${TAKE_NARRATIVE_PHRASE}\\s+${obj}[\\s.]*`, "gi"),
+      new RegExp(`,\\s*who\\s+now\\s+holds?\\s+${obj}[\\s.]*`, "gi"),
+      new RegExp(`\\s+[Yy]ou\\s+hold\\s+${obj}[\\s.]*`, "gi"),
+      new RegExp(`\\s+[Yy]ou\\s+(?:have|took|picked\\s+up|carry)\\s+${obj}[\\s.]*`, "gi"),
+      new RegExp(`\\s+(?:[Tt]he\\s+)?${obj}\\s+(?:is\\s+)?(?:now\\s+)?in\\s+your\\s+hand[s]?[\\s.]*`, "gi"),
+      new RegExp(`\\s+with\\s+${obj}\\s+in\\s+(?:your\\s+)?hand[s]?[\\s.]*`, "gi"),
+    ];
+    for (const re of patterns) {
+      out = out.replace(re, (match) => (match.trimEnd().endsWith(".") ? ". " : " "));
+    }
+  }
+  return out.replace(/\s{2,}/g, " ").replace(/\s+\./g, ".").replace(/\s+,/g, ",").trim();
+}
+
 const OLLAMA_UNREACHABLE_PROSE =
   "The world pauses, as if holding its breath. (Engine: Ollama unreachable. Please check the local model service.)";
 
@@ -373,6 +423,18 @@ export async function takeTurn(
       entry.new_location_id = undefined;
     }
   }
+  /* Only allow moving an object to the player when the player's command explicitly took that object (e.g. "take torch"). Block model from putting objects in hand on "apologize", "look", etc. */
+  const strippedObjectEntities: { node_id: string; name?: string }[] = [];
+  const locationNodeId = ctx.location.node_id;
+  for (const [node_id, entry] of impactByNode) {
+    if (node_id === "player" || node_id === locationNodeId) continue;
+    if (entry.new_location_id !== "player") continue;
+    const entity = ctx.entities.find((e) => e.node_id === node_id);
+    if (!isTakeCommandForObject(playerCommand, node_id, entity?.name)) {
+      entry.new_location_id = undefined;
+      strippedObjectEntities.push({ node_id, name: entity?.name });
+    }
+  }
 
   const vocabulary = getFullVocabulary(db);
   const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
@@ -521,9 +583,14 @@ export async function takeTurn(
     }
   }
 
+  let prose = mistralResponse.narrative_prose ?? "";
+  if (strippedObjectEntities.length > 0 && prose) {
+    prose = sanitizeNarrativeStrippedTakes(prose, strippedObjectEntities);
+  }
+
   return {
     result: mistralResponse.action_result,
-    prose: mistralResponse.narrative_prose ?? "",
+    prose,
     reconciliation_notes: mistralResponse.reconciliation_notes ?? null,
   };
 }
