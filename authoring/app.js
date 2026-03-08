@@ -341,29 +341,35 @@
     if (!wrap || !canvas) return;
     const w = wrap.clientWidth || 0;
     const h = wrap.clientHeight || 0;
-    if (w < 1 || h < 1) return;
-    if (refWrapW < 1 || refWrapH < 1) {
-      refWrapW = w;
-      refWrapH = h;
+    if (w >= 1 && h >= 1) {
+      if (refWrapW < 1 || refWrapH < 1) {
+        refWrapW = w;
+        refWrapH = h;
+      }
     }
+    /* When wrap has no size yet, use content size so canvas isn't 0 and something shows. */
+    const viewW = refWrapW >= 1 ? refWrapW : sw;
+    const viewH = refWrapH >= 1 ? refWrapH : sh;
     /* Skip canvas/scroll only if wrap size and zoom are unchanged (zoom must always update). */
-    if (w === lastApplyWrapW && h === lastApplyWrapH && zoomPercent === lastApplyZoomPercent) return;
+    if (w >= 1 && h >= 1 && w === lastApplyWrapW && h === lastApplyWrapH && zoomPercent === lastApplyZoomPercent) return;
     lastApplyWrapW = w;
     lastApplyWrapH = h;
     lastApplyZoomPercent = zoomPercent;
     lastApplyZoomTime = Date.now();
     /* Canvas size from ref viewport so scrollbars don't shrink canvas and kill vertical pan. */
-    const cw = Math.max(refWrapW, sw) + PAN_MARGIN;
-    const ch = Math.max(refWrapH, sh) + PAN_MARGIN;
+    const cw = Math.max(viewW, sw) + PAN_MARGIN;
+    const ch = Math.max(viewH, sh) + PAN_MARGIN;
     canvas.style.minWidth = cw + "px";
     canvas.style.minHeight = ch + "px";
     canvas.style.width = cw + "px";
     canvas.style.height = ch + "px";
-    /* Center scroll in visible viewport (use current w/h for scroll math). */
-    const maxScrollLeft = Math.max(0, cw - w);
-    const maxScrollTop = Math.max(0, ch - h);
-    if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
-    if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
+    /* Center scroll in visible viewport when we have wrap size. */
+    if (w >= 1 && h >= 1) {
+      const maxScrollLeft = Math.max(0, cw - w);
+      const maxScrollTop = Math.max(0, ch - h);
+      if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
+      if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
+    }
   }
 
   function setZoomPercent(value) {
