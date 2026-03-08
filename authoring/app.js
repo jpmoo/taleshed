@@ -937,31 +937,14 @@
   (function setupZoomControls() {
     const zoomOut = document.getElementById("zoom-out");
     const zoomIn = document.getElementById("zoom-in");
-    const zoomInput = document.getElementById("zoom-percent");
-    function updateZoomUI() {
-      if (zoomInput) zoomInput.value = Math.round(cameraDistance);
-    }
-    if (zoomOut) zoomOut.addEventListener("click", function () {
-      cameraDistance = Math.max(CAMERA_DIST_MIN, cameraDistance - 15);
-      updateCameraPosition();
-      updateZoomUI();
-    });
     if (zoomIn) zoomIn.addEventListener("click", function () {
       cameraDistance = Math.min(CAMERA_DIST_MAX, cameraDistance + 15);
       updateCameraPosition();
-      updateZoomUI();
     });
-    if (zoomInput) {
-      zoomInput.addEventListener("change", function () {
-        const v = parseFloat(zoomInput.value);
-        if (!isNaN(v)) {
-          cameraDistance = Math.max(CAMERA_DIST_MIN, Math.min(CAMERA_DIST_MAX, v));
-          updateCameraPosition();
-          updateZoomUI();
-        }
-      });
-      zoomInput.addEventListener("blur", updateZoomUI);
-    }
+    if (zoomOut) zoomOut.addEventListener("click", function () {
+      cameraDistance = Math.max(CAMERA_DIST_MIN, cameraDistance - 15);
+      updateCameraPosition();
+    });
     window.addEventListener("resize", function () {
       if (!document.getElementById("panel-world-graph").classList.contains("active")) return;
       if (renderer3D && camera3D && canvas3D) {
