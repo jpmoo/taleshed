@@ -221,7 +221,7 @@ body {
   display: flex;
 }
 
-/* Canvas: 100% when content fits (from JS), else pixel size; margin auto centers if smaller than wrap; zoom wrapper centered inside */
+/* Canvas: always content size (set in JS); margin auto centers in wrap when smaller, scrollable when larger */
 .grid-canvas {
   margin: auto;
   flex-shrink: 0;

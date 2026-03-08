@@ -347,15 +347,8 @@
       input.value = zoomPercent;
     }
     if (wrap && canvas) {
-      var wrapW = wrap.clientWidth || 0;
-      var wrapH = wrap.clientHeight || 0;
-      if (wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH)) {
-        canvas.style.width = sw + "px";
-        canvas.style.height = sh + "px";
-      } else {
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-      }
+      canvas.style.width = Math.max(1, sw) + "px";
+      canvas.style.height = Math.max(1, sh) + "px";
     }
   }
 
