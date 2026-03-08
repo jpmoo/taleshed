@@ -315,6 +315,7 @@
 
   var lastApplyWrapW = 0;
   var lastApplyWrapH = 0;
+  var lastApplyZoomPercent = 0;
   var lastApplyZoomTime = 0;
   var applyZoomThrottleMs = 400;
 
@@ -338,17 +339,20 @@
     const w = wrap.clientWidth || 0;
     const h = wrap.clientHeight || 0;
     if (w < 1 || h < 1) return;
-    /* Skip canvas/scroll update if wrap size unchanged (avoids slide from duplicate applyZoom). */
-    if (w === lastApplyWrapW && h === lastApplyWrapH) return;
+    /* Skip canvas/scroll only if wrap size and zoom are unchanged (zoom must always update). */
+    if (w === lastApplyWrapW && h === lastApplyWrapH && zoomPercent === lastApplyZoomPercent) return;
     lastApplyWrapW = w;
     lastApplyWrapH = h;
+    lastApplyZoomPercent = zoomPercent;
     lastApplyZoomTime = Date.now();
-    /* Canvas must fit scaled content and have margin so scroll exists; zoom wrapper is centered in canvas. */
+    /* Canvas must fit scaled content and have margin; prevent shrink so vertical scroll works. */
     const cw = Math.max(w, sw) + PAN_MARGIN;
     const ch = Math.max(h, sh) + PAN_MARGIN;
+    canvas.style.minWidth = cw + "px";
+    canvas.style.minHeight = ch + "px";
     canvas.style.width = cw + "px";
     canvas.style.height = ch + "px";
-    /* Set scroll to center the viewport on the canvas using the sizes we just set. */
+    /* Set scroll to center the viewport on the canvas. */
     const maxScrollLeft = Math.max(0, cw - w);
     const maxScrollTop = Math.max(0, ch - h);
     if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
@@ -359,8 +363,7 @@
     const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(Number(value)) || 100));
     if (next === zoomPercent) return;
     zoomPercent = next;
-    lastApplyWrapW = 0;
-    lastApplyWrapH = 0;
+    lastApplyZoomPercent = 0;
     applyZoom();
   }
 
@@ -444,12 +447,10 @@
       });
       layer.appendChild(box);
     });
-    lastApplyWrapW = 0;
-    lastApplyWrapH = 0;
+    lastApplyZoomPercent = 0;
+    applyZoom();
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        applyZoom();
-      });
+      applyZoom();
     });
   }
 
@@ -666,8 +667,7 @@
     }
     window.addEventListener("resize", function () {
       if (!document.getElementById("panel-world-graph").classList.contains("active")) return;
-      lastApplyWrapW = 0;
-      lastApplyWrapH = 0;
+      lastApplyZoomPercent = 0;
       applyZoom();
     });
     var wrapEl = document.getElementById("grid-wrap");
