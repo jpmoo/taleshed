@@ -349,14 +349,13 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
-      var cw = sw;
-      var ch = sh;
-      if (wrapW > 0 && wrapH > 0) {
-        cw = Math.max(wrapW, sw);
-        ch = Math.max(wrapH, sh);
+      if (wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH)) {
+        canvas.style.width = sw + "px";
+        canvas.style.height = sh + "px";
+      } else {
+        canvas.style.width = "";
+        canvas.style.height = "";
       }
-      canvas.style.width = Math.max(1, cw) + "px";
-      canvas.style.height = Math.max(1, ch) + "px";
     }
   }
 
