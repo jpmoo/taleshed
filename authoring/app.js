@@ -360,8 +360,9 @@
         w = document.documentElement.clientWidth || window.innerWidth || 800;
         h = document.documentElement.clientHeight || window.innerHeight || 600;
       }
-      canvas.style.width = Math.max(w, sw) + "px";
-      canvas.style.height = Math.max(h, sh) + "px";
+      var panMargin = 200;
+      canvas.style.width = (Math.max(w, sw) + panMargin) + "px";
+      canvas.style.height = (Math.max(h, sh) + panMargin) + "px";
     }
   }
 
