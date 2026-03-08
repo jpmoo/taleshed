@@ -17,6 +17,7 @@ import {
   updateWorldGraphLocation,
   updateWorldGraphMeta,
   getPlayerCameFromLocationId,
+  getLocationNodeIds,
   insertVocabulary,
   resolveLocationNodeId,
 } from "./db/database.js";
@@ -134,6 +135,30 @@ function safeParseExits(val: string | undefined | null): { label: string; target
   }
 }
 
+const CARDINAL_AND_ORDINAL_DIRECTIONS = [
+  "north",
+  "south",
+  "east",
+  "west",
+  "northeast",
+  "northwest",
+  "southeast",
+  "southwest",
+  "up",
+  "down",
+] as const;
+
+/** True if the command is purely a movement attempt (direction word, "go north", "leave", etc.). */
+function isMovementCommand(playerCommand: string): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  if (CARDINAL_AND_ORDINAL_DIRECTIONS.some((d) => cmd === d || cmd === "go " + d)) return true;
+  const generic = ["go through the door", "through the door", "leave", "go out", "exit"];
+  if (generic.some((g) => cmd === g || cmd.startsWith(g + " "))) return true;
+  if (cmd.startsWith("go through") || cmd.startsWith("through ")) return true;
+  if (cmd === "go") return true;
+  return false;
+}
+
 /** If the player command is a movement (go through door, east, leave, etc.), return the exit target node_id; otherwise null. */
 function resolveMovementTarget(
   playerCommand: string,
@@ -141,8 +166,7 @@ function resolveMovementTarget(
 ): string | null {
   if (locationExits.length === 0) return null;
   const cmd = playerCommand.trim().toLowerCase();
-  const dirs = ["north", "south", "east", "west"] as const;
-  for (const d of dirs) {
+  for (const d of CARDINAL_AND_ORDINAL_DIRECTIONS) {
     if (cmd === d || cmd === "go " + d) {
       const ex = locationExits.find((e) => (e.direction ?? "").toLowerCase() === d);
       return ex ? ex.target : null;
@@ -339,6 +363,26 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   };
 }
 
+/** Expand single-token abbreviations for the player command. Only expands when the whole command is exactly the abbreviation. */
+function expandPlayerCommandAbbreviations(playerCommand: string): string {
+  const cmd = playerCommand.trim().toLowerCase();
+  const abbrevs: Record<string, string> = {
+    i: "inventory",
+    l: "look",
+    n: "north",
+    ne: "northeast",
+    e: "east",
+    se: "southeast",
+    s: "south",
+    sw: "southwest",
+    w: "west",
+    nw: "northwest",
+    u: "up",
+    d: "down",
+  };
+  return abbrevs[cmd] ?? playerCommand.trim();
+}
+
 function normalizeActionDescription(playerCommand: string): string {
   const t = playerCommand.trim();
   return t.length > 200 ? t.slice(0, 197) + "..." : t;
@@ -361,6 +405,7 @@ export async function takeTurn(
   if (!playerCommand) {
     return { result: "error", prose: "", error: "player_command is required and must be non-empty" };
   }
+  playerCommand = expandPlayerCommandAbbreviations(playerCommand);
 
   const ctx = assembleSceneContext(db);
   if (!ctx) {
@@ -372,6 +417,9 @@ export async function takeTurn(
   }
 
   const destTarget = resolveMovementTarget(playerCommand, ctx.locationExits ?? []);
+  if (isMovementCommand(playerCommand) && destTarget === null) {
+    return { result: "failure", prose: "You can't go that way." };
+  }
   const destinationScene =
     destTarget != null ? assembleDestinationScene(db, destTarget) : null;
 
@@ -443,6 +491,12 @@ export async function takeTurn(
     impactByNode.set(nodeId, entry);
   }
 
+  const locationNodeIds = getLocationNodeIds(db);
+  for (const [, entry] of impactByNode) {
+    entry.adjectives_old = entry.adjectives_old.filter((a) => !locationNodeIds.has(String(a).trim().toLowerCase()));
+    entry.adjectives_new = entry.adjectives_new.filter((a) => !locationNodeIds.has(String(a).trim().toLowerCase()));
+  }
+
   /* When the player only offered or asked, do not apply state changes or moves—even if the model disobeyed. */
   if (isOfferOrQuestion(playerCommand)) {
     for (const [, entry] of impactByNode) {
@@ -455,6 +509,11 @@ export async function takeTurn(
     for (const [, entry] of impactByNode) {
       entry.new_location_id = undefined;
     }
+  }
+  /* When the player gave a movement command and we resolved a valid exit, always move the player there even if the model forgot new_location_id. */
+  if (isMovementCommand(playerCommand) && destTarget != null) {
+    const playerEntry = impactByNode.get("player");
+    if (playerEntry) playerEntry.new_location_id = destTarget;
   }
   /* Only allow moving an object to the player when the player's command explicitly took that object (e.g. "take torch"). Block model from putting objects in hand on "apologize", "look", etc. */
   const strippedObjectEntities: { node_id: string; name?: string }[] = [];
@@ -578,14 +637,21 @@ export async function takeTurn(
           } else if (node.node_type === "player") {
             const targetNode = getNode(db, resolvedId);
             if (targetNode?.node_type === "location") {
-              const previousLocationId = node.location_id ?? null;
-              updateWorldGraphLocation(db, node_id, resolvedId);
-              if (previousLocationId) {
-                updateWorldGraphMeta(
-                  db,
-                  "player",
-                  JSON.stringify({ came_from_location_id: previousLocationId })
+              const validTargets = new Set((ctx.locationExits ?? []).map((e) => e.target));
+              if (!validTargets.has(resolvedId)) {
+                console.warn(
+                  `[TaleShed] Ignoring new_location_id "${raw}" for player: not an exit from current location (model may have invented a move).`
                 );
+              } else {
+                const previousLocationId = node.location_id ?? null;
+                updateWorldGraphLocation(db, node_id, resolvedId);
+                if (previousLocationId) {
+                  updateWorldGraphMeta(
+                    db,
+                    "player",
+                    JSON.stringify({ came_from_location_id: previousLocationId })
+                  );
+                }
               }
             } else {
               console.warn(

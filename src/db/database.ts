@@ -32,6 +32,14 @@ export function getLocation(db: Database.Database, locationId: string): WorldNod
   return getNode(db, locationId);
 }
 
+/** All location node_ids (lowercase) for filtering—e.g. never use a location name as an adjective. */
+export function getLocationNodeIds(db: Database.Database): Set<string> {
+  const rows = db
+    .prepare("SELECT node_id FROM world_graph WHERE node_type = 'location' AND is_active = 1")
+    .all() as { node_id: string }[];
+  return new Set(rows.map((r) => r.node_id.trim().toLowerCase()));
+}
+
 /** Resolve a location by exact node_id or by case-insensitive node_id/name (e.g. "the kitchen" -> kitchen). Returns canonical node_id or null. */
 export function resolveLocationNodeId(db: Database.Database, idOrName: string): string | null {
   const trimmed = (idOrName ?? "").trim();
