@@ -215,7 +215,7 @@ body {
 .grid-wrap {
   position: relative;
   overflow: auto;
-  min-height: 0;
+  min-height: 100%;
   cursor: grab;
   background: var(--paper);
   display: flex;

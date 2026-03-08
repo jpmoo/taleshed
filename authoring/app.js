@@ -69,10 +69,17 @@
         locations = rows.filter((n) => n.node_type === "location");
         computeLayoutFromExits();
         render();
-        setTimeout(function () {
-          applyZoom();
-          centerMapScrollAfterLayout();
-        }, 400);
+        (function pollApplyZoom() {
+          var wrap = document.getElementById("grid-wrap");
+          var n = 0;
+          var t = setInterval(function () {
+            applyZoom();
+            centerMapScroll();
+            n++;
+            if (n >= 12) clearInterval(t);
+          }, 80);
+          setTimeout(function () { clearInterval(t); }, 1100);
+        })();
         var nodesPanel = document.getElementById("panel-nodes");
         if (nodesPanel && nodesPanel.classList.contains("active")) renderNodes();
       })
