@@ -355,8 +355,12 @@
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
       if (w > 0 && h > 0) {
-        canvasWrap.style.minWidth = w + "px";
-        canvasWrap.style.minHeight = h + "px";
+        var cw = Math.max(w, sw);
+        var ch = Math.max(h, sh);
+        canvasWrap.style.width = cw + "px";
+        canvasWrap.style.height = ch + "px";
+        canvasWrap.style.minWidth = "";
+        canvasWrap.style.minHeight = "";
       }
     }
   }

@@ -212,24 +212,29 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
+/* Grid paper on wrap so it always fills the visible viewport */
 .grid-wrap {
   position: relative;
   overflow: auto;
   min-height: 0;
   cursor: grab;
-  background: var(--paper);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: var(--block) var(--block);
+  background-position: 0 0;
 }
 
-/* Inner wrapper: at least viewport-sized so scroll area is big enough to center canvas */
+/* Inner wrapper: sized in JS to max(viewport, content); flex centers the canvas */
 .grid-canvas-wrap {
-  min-width: 100%;
-  min-height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
+  box-sizing: border-box;
 }
 
-/* Canvas: always content size (set in JS); centered inside grid-canvas-wrap */
+/* Canvas: content size (set in JS); no background so grid on wrap shows through */
 .grid-canvas {
   flex-shrink: 0;
   display: flex;
@@ -237,11 +242,7 @@ body {
   align-items: center;
   min-width: 0;
   min-height: 0;
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: var(--block) var(--block);
-  background-position: 0 0;
+  background: transparent;
 }
 
 .grid-zoom-wrapper {
