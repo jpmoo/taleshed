@@ -102,13 +102,22 @@
         <label for="edit-base_description">base_description</label>
         <textarea id="edit-base_description" name="base_description" rows="3"></textarea>
       </div>
-      <div class="field">
-        <label for="edit-adjectives">adjectives (JSON array)</label>
-        <input type="text" id="edit-adjectives" name="adjectives" placeholder='["dark","lit"]' />
+      <div class="field adjectives-section" id="adjectives-section">
+        <label>adjectives</label>
+        <p class="field-hint">Choose from vocabulary. One term per row.</p>
+        <div id="adjectives-list" class="adjectives-list"></div>
+        <div class="adjectives-add-row">
+          <select id="adjectives-vocab-select" class="adjectives-vocab-select" aria-label="Vocabulary term to add">
+            <option value="">— choose term —</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-add-adjective" id="adjectives-add">+ Add</button>
+        </div>
       </div>
+      <input type="hidden" id="edit-adjectives" name="adjectives" />
       <div class="field">
         <label for="edit-location_id">location_id</label>
-        <input type="text" id="edit-location_id" name="location_id" placeholder="node_id of container or null" />
+        <input type="text" id="edit-location_id" name="location_id" list="edit-location_id-list" placeholder="node_id of container or null" autocomplete="off" />
+        <datalist id="edit-location_id-list"></datalist>
       </div>
       <div class="field row">
         <label><input type="checkbox" id="edit-is_active" name="is_active" checked /> is_active</label>

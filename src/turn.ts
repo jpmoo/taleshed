@@ -15,6 +15,8 @@ import {
   writeHistoryLedger,
   updateWorldGraphAdjectives,
   updateWorldGraphLocation,
+  updateWorldGraphMeta,
+  getPlayerCameFromLocationId,
   insertVocabulary,
   resolveLocationNodeId,
 } from "./db/database.js";
@@ -220,6 +222,22 @@ function safeParseAdjectives(val: string | unknown): string[] {
   }
 }
 
+/** True if a light source is present: a lit object in player inventory, or in the location, or in an open container here. */
+function isDarkNegated(
+  inventoryNodes: WorldNode[],
+  entitiesInLocationNodes: WorldNode[]
+): boolean {
+  const hasLit = (n: WorldNode) =>
+    n.node_type === "object" && safeParseAdjectives(n.adjectives).some((a) => a.toLowerCase() === "lit");
+  for (const n of inventoryNodes) {
+    if (hasLit(n)) return true;
+  }
+  for (const n of entitiesInLocationNodes) {
+    if (hasLit(n)) return true;
+  }
+  return false;
+}
+
 /** Drop model slip-ups: JSON fragments or non-words (e.g. "[]", "[") are not adjectives. */
 function isValidAdjectiveToken(s: string): boolean {
   const t = String(s).trim();
@@ -272,7 +290,7 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
       .filter(Boolean);
     rawEntities.push(toSceneEntity(node, recent));
   }
-  const entities = rawEntities.sort(
+  let entities = rawEntities.sort(
     (a, b) =>
       (entityOrder[a.node_type] ?? 2) - (entityOrder[b.node_type] ?? 2) ||
       a.node_id.localeCompare(b.node_id)
@@ -289,7 +307,19 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
     rule_description: v.rule_description,
   }));
 
-  const locationExits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+  let locationExits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+  const locAdjectives = safeParseAdjectives(location.adjectives);
+  const darkActive = locAdjectives.some((a) => a.toLowerCase() === "dark");
+  const cameFromId = getPlayerCameFromLocationId(db);
+  if (darkActive && !isDarkNegated(inventory, inLocation)) {
+    entities = [];
+    if (cameFromId != null) {
+      const entranceOnly = locationExits.filter((e) => e.target === cameFromId);
+      locationExits = entranceOnly.length > 0 ? entranceOnly : locationExits;
+    } else {
+      locationExits = [];
+    }
+  }
 
   debugLog("scene entities", `location: ${location.node_id} | entity node_ids: ${entities.map((e) => e.node_id).join(", ")}`);
 
@@ -504,10 +534,20 @@ export async function takeTurn(
           continue;
         }
         const currentAdj = safeParseAdjectives(node.adjectives);
-        const newJson = JSON.stringify(entry.adjectives_new);
+        let newAdj = entry.adjectives_new;
+        if (node.node_type === "location") {
+          const hadDark = currentAdj.some((a) => a.toLowerCase() === "dark");
+          const modelAddedDark = !hadDark && newAdj.some((a) => a.toLowerCase() === "dark");
+          if (hadDark && !newAdj.some((a) => a.toLowerCase() === "dark")) {
+            newAdj = [...newAdj, "dark"];
+          } else if (modelAddedDark) {
+            newAdj = newAdj.filter((a) => a.toLowerCase() !== "dark");
+          }
+        }
+        const newJson = JSON.stringify(newAdj);
         const currentJson = JSON.stringify(currentAdj);
         if (newJson !== currentJson) {
-          const modelReturnedEmpty = entry.adjectives_new.length === 0;
+          const modelReturnedEmpty = newAdj.length === 0;
           const nodeHadAdjectives = currentAdj.length > 0;
           const modelAcknowledgedCurrent =
             entry.adjectives_old.length > 0 &&
@@ -535,7 +575,15 @@ export async function takeTurn(
           } else if (node.node_type === "player") {
             const targetNode = getNode(db, resolvedId);
             if (targetNode?.node_type === "location") {
+              const previousLocationId = node.location_id ?? null;
               updateWorldGraphLocation(db, node_id, resolvedId);
+              if (previousLocationId) {
+                updateWorldGraphMeta(
+                  db,
+                  "player",
+                  JSON.stringify({ came_from_location_id: previousLocationId })
+                );
+              }
             } else {
               console.warn(
                 `[TaleShed] Ignoring new_location_id "${raw}" for player: player location must be a location node, not ${targetNode?.node_type ?? "unknown"}.`

@@ -394,4 +394,40 @@ body {
 }
 .btn-add-exit:hover { filter: brightness(1.08); }
 .exits-section.hidden { display: none; }
+
+.adjectives-list { margin-bottom: 0.5rem; }
+.adjective-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.adjective-row .adjective-term { flex: 1; min-width: 0; font-weight: 500; }
+.adjective-row .btn-delete-adjective {
+  flex-shrink: 0;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  background: var(--danger);
+  color: var(--white);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.adjective-row .btn-delete-adjective:hover { filter: brightness(1.08); }
+.adjectives-add-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.adjectives-add-row .adjectives-vocab-select { flex: 1; min-width: 0; max-width: 14rem; }
+.btn-add-adjective {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: var(--white);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-add-adjective:hover { filter: brightness(1.08); }
 .modal-move-player-wrap.hidden { display: none; }

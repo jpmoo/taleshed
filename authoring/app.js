@@ -174,6 +174,121 @@
     });
   }
 
+  function parseAdjectivesFromValue(val) {
+    if (val == null || val === "") return [];
+    if (Array.isArray(val)) return val.map(function (x) { return String(x).trim(); }).filter(Boolean);
+    if (typeof val !== "string") return [];
+    try {
+      const parsed = JSON.parse(val.trim() || "[]");
+      return Array.isArray(parsed) ? parsed.map(function (x) { return String(x).trim(); }).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderAdjectivesList(adjectivesArray, vocabularyRows) {
+    const listEl = document.getElementById("adjectives-list");
+    const selectEl = document.getElementById("adjectives-vocab-select");
+    if (!listEl || !selectEl) return;
+    const adjectives = Array.isArray(adjectivesArray) ? adjectivesArray : parseAdjectivesFromValue(adjectivesArray);
+    const used = new Set(adjectives.map(function (a) { return a.toLowerCase(); }));
+
+    listEl.innerHTML = "";
+    adjectives.forEach(function (adj) {
+      const row = document.createElement("div");
+      row.className = "adjective-row";
+      const span = document.createElement("span");
+      span.className = "adjective-term";
+      span.textContent = adj;
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn-delete-adjective";
+      delBtn.textContent = "Delete";
+      delBtn.setAttribute("aria-label", "Remove this adjective");
+      delBtn.addEventListener("click", function () {
+        row.remove();
+        syncAdjectivesToHiddenInput();
+        refreshAdjectivesVocabSelect();
+      });
+      row.appendChild(span);
+      row.appendChild(delBtn);
+      listEl.appendChild(row);
+    });
+
+    selectEl.innerHTML = "";
+    const emptyOpt = document.createElement("option");
+    emptyOpt.value = "";
+    emptyOpt.textContent = "— choose term —";
+    selectEl.appendChild(emptyOpt);
+    (vocabularyRows || []).forEach(function (v) {
+      const adj = (v.adjective || "").trim();
+      if (!adj) return;
+      const opt = document.createElement("option");
+      opt.value = adj;
+      opt.textContent = adj;
+      if (used.has(adj.toLowerCase())) opt.disabled = true;
+      selectEl.appendChild(opt);
+    });
+    syncAdjectivesToHiddenInput();
+  }
+
+  function refreshAdjectivesVocabSelect(usedSet) {
+    const selectEl = document.getElementById("adjectives-vocab-select");
+    if (!selectEl) return;
+    const current = usedSet || new Set(
+      Array.from(document.querySelectorAll(".adjective-row .adjective-term")).map(function (el) { return el.textContent.toLowerCase(); })
+    );
+    Array.from(selectEl.options).forEach(function (opt) {
+      if (opt.value === "") return;
+      opt.disabled = current.has(opt.value.toLowerCase());
+    });
+  }
+
+  function syncAdjectivesToHiddenInput() {
+    const hidden = document.getElementById("edit-adjectives");
+    if (!hidden) return;
+    hidden.value = JSON.stringify(collectAdjectivesFromList());
+  }
+
+  function collectAdjectivesFromList() {
+    const listEl = document.getElementById("adjectives-list");
+    if (!listEl) return [];
+    return Array.from(listEl.querySelectorAll(".adjective-row .adjective-term")).map(function (el) { return el.textContent.trim(); }).filter(Boolean);
+  }
+
+  function addAdjectiveRow() {
+    const selectEl = document.getElementById("adjectives-vocab-select");
+    const listEl = document.getElementById("adjectives-list");
+    if (!selectEl || !listEl) return;
+    const adj = (selectEl.value || "").trim();
+    if (!adj) return;
+    const used = new Set(
+      Array.from(listEl.querySelectorAll(".adjective-row .adjective-term")).map(function (el) { return el.textContent.toLowerCase(); })
+    );
+    if (used.has(adj.toLowerCase())) return;
+    const row = document.createElement("div");
+    row.className = "adjective-row";
+    const span = document.createElement("span");
+    span.className = "adjective-term";
+    span.textContent = adj;
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn-delete-adjective";
+    delBtn.textContent = "Delete";
+    delBtn.setAttribute("aria-label", "Remove this adjective");
+    delBtn.addEventListener("click", function () {
+      row.remove();
+      syncAdjectivesToHiddenInput();
+      refreshAdjectivesVocabSelect();
+    });
+    row.appendChild(span);
+    row.appendChild(delBtn);
+    listEl.appendChild(row);
+    syncAdjectivesToHiddenInput();
+    refreshAdjectivesVocabSelect();
+    selectEl.value = "";
+  }
+
   function collectExitsFromList() {
     const listEl = document.getElementById("exits-list");
     if (!listEl) return [];
@@ -679,16 +794,20 @@
     }, { passive: false });
 
     window.addEventListener("keydown", function (e) {
-      if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD") {
-        keysPressed[e.code] = true;
-        e.preventDefault();
-      }
+      if (e.code !== "KeyW" && e.code !== "KeyA" && e.code !== "KeyS" && e.code !== "KeyD") return;
+      var el = document.activeElement;
+      var tag = el && el.tagName ? el.tagName.toUpperCase() : "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      keysPressed[e.code] = true;
+      e.preventDefault();
     });
     window.addEventListener("keyup", function (e) {
-      if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD") {
-        keysPressed[e.code] = false;
-        e.preventDefault();
-      }
+      if (e.code !== "KeyW" && e.code !== "KeyA" && e.code !== "KeyS" && e.code !== "KeyD") return;
+      var el = document.activeElement;
+      var tag = el && el.tagName ? el.tagName.toUpperCase() : "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      keysPressed[e.code] = false;
+      e.preventDefault();
     });
 
     var tooltipEl = document.getElementById("graph-tooltip");
@@ -1097,6 +1216,7 @@
     openNodeModalNew();
   });
   function openNodeModalNew() {
+    refreshLocationIdDatalist();
     document.getElementById("edit-node_id").value = "";
     document.getElementById("edit-node_id_ro").value = "";
     document.getElementById("edit-node_id_ro").readOnly = false;
@@ -1117,8 +1237,11 @@
     document.getElementById("modal-title").textContent = "New location";
     document.getElementById("modal-delete").style.display = "none";
     document.getElementById("modal-move-player-wrap").classList.add("hidden");
-    document.getElementById("modal").classList.remove("hidden");
-    document.getElementById("modal-backdrop").classList.remove("hidden");
+    fetchVocabularyForModal(function (vocab) {
+      renderAdjectivesList([], vocab);
+      document.getElementById("modal").classList.remove("hidden");
+      document.getElementById("modal-backdrop").classList.remove("hidden");
+    });
   }
 
   function escapeHtml(s) {
@@ -1134,10 +1257,29 @@
       .replace(/>/g, "&gt;");
   }
 
+  function refreshLocationIdDatalist() {
+    const list = document.getElementById("edit-location_id-list");
+    if (!list) return;
+    list.innerHTML = "";
+    (allNodes || []).forEach(function (n) {
+      const opt = document.createElement("option");
+      opt.value = n.node_id || "";
+      if (opt.value) list.appendChild(opt);
+    });
+  }
+
+  function fetchVocabularyForModal(cb) {
+    fetch(apiUrl("/api/vocabulary"))
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { cb(rows || []); })
+      .catch(function () { cb([]); });
+  }
+
   // Node modal: when opening for edit we set readOnly and show delete; when opening for new we already have openNodeModalNew
   function openModal(nodeId) {
     const node = allNodes.find((n) => n.node_id === nodeId);
     if (!node) return;
+    refreshLocationIdDatalist();
     document.getElementById("edit-node_id").value = node.node_id;
     document.getElementById("edit-node_id_ro").value = node.node_id;
     document.getElementById("edit-node_id_ro").readOnly = true;
@@ -1145,7 +1287,7 @@
     document.getElementById("edit-name").value = node.name || "";
     document.getElementById("edit-base_description").value = node.base_description || "";
     document.getElementById("edit-adjectives").value =
-      typeof node.adjectives === "string" ? node.adjectives : JSON.stringify(node.adjectives || [], null, 2);
+      typeof node.adjectives === "string" ? node.adjectives : JSON.stringify(node.adjectives || []);
     document.getElementById("edit-location_id").value = node.location_id ?? "";
     document.getElementById("edit-is_active").checked = !!node.is_active;
     document.getElementById("edit-meta").value = node.meta ?? "";
@@ -1166,8 +1308,11 @@
     } else {
       document.getElementById("modal-move-player-wrap").classList.add("hidden");
     }
-    document.getElementById("modal").classList.remove("hidden");
-    document.getElementById("modal-backdrop").classList.remove("hidden");
+    fetchVocabularyForModal(function (vocab) {
+      renderAdjectivesList(node.adjectives, vocab);
+      document.getElementById("modal").classList.remove("hidden");
+      document.getElementById("modal-backdrop").classList.remove("hidden");
+    });
   }
 
   document.getElementById("edit-node_type").addEventListener("change", function () {
@@ -1228,8 +1373,11 @@
     addExitRow(document.getElementById("edit-node_id").value || null);
   });
 
+  document.getElementById("adjectives-add").addEventListener("click", addAdjectiveRow);
+
   document.getElementById("modal-form").addEventListener("submit", (e) => {
     e.preventDefault();
+    syncAdjectivesToHiddenInput();
     const nodeId = document.getElementById("edit-node_id").value;
     const nodeIdRo = document.getElementById("edit-node_id_ro").value.trim();
     const isNew = !nodeId;

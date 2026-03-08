@@ -11,6 +11,19 @@ export function getPlayer(db: Database.Database): WorldNode | undefined {
   return db.prepare("SELECT * FROM world_graph WHERE node_id = 'player' AND is_active = 1").get() as WorldNode | undefined;
 }
 
+/** Player meta may store { came_from_location_id: string }. Returns that location id or null. */
+export function getPlayerCameFromLocationId(db: Database.Database): string | null {
+  const player = getPlayer(db);
+  if (!player || !player.meta || typeof player.meta !== "string") return null;
+  try {
+    const obj = JSON.parse(player.meta) as Record<string, unknown>;
+    const id = obj?.came_from_location_id;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getNode(db: Database.Database, nodeId: string): WorldNode | undefined {
   return db.prepare("SELECT * FROM world_graph WHERE node_id = ? AND is_active = 1").get(nodeId) as WorldNode | undefined;
 }
@@ -164,6 +177,10 @@ export function updateWorldGraphAdjectives(db: Database.Database, nodeId: string
 
 export function updateWorldGraphLocation(db: Database.Database, nodeId: string, locationId: string | null): void {
   db.prepare("UPDATE world_graph SET location_id = ? WHERE node_id = ?").run(locationId, nodeId);
+}
+
+export function updateWorldGraphMeta(db: Database.Database, nodeId: string, metaJson: string | null): void {
+  db.prepare("UPDATE world_graph SET meta = ? WHERE node_id = ?").run(metaJson, nodeId);
 }
 
 export function deleteHistoryAfterEntryId(db: Database.Database, entryId: number): void {

@@ -15,6 +15,9 @@ function clearHistoryLedger(): void {
   console.log("Cleared history_ledger.");
 }
 
+const DARK_RULE =
+  "Location adjective (authoring only—never add in game). When set, the location is dark unless a light source is present. With no light source (lit object on the player or in the room/open container), it becomes a completely overriding condition: the player sees nothing except the exit they entered by; no other exits or entities exist for the scene. When a light source is present, 'dark' is negated for that turn but remains on the location. Never remove 'dark' from a location's adjectives_new.";
+
 const STARTER_VOCABULARY: [string, string][] = [
   ["locked", "Blocks passage or interaction. Requires a key, tool, or specific action to remove."],
   ["broken", "Object cannot perform its primary function. May still be used as raw material or weapon."],
@@ -22,7 +25,7 @@ const STARTER_VOCABULARY: [string, string][] = [
   ["guarded", "NPC is cautious with strangers. Requires trust-building before sharing information or assistance."],
   ["hostile", "NPC will not cooperate and may attack if approached. Requires significant intervention to change."],
   ["sacred", "Location or object carries religious or spiritual significance. Disrespectful actions may have consequences."],
-  ["dark", "Location has no light source. Actions requiring sight may fail unless the player carries a lit object."],
+  ["dark", DARK_RULE],
   ["sealed", "Passage or container is physically blocked and cannot be opened by normal means."],
   ["open", "Object is open, with items inside visible."],
   ["closed", "Object is closed; items inside are not visible."],
@@ -32,6 +35,7 @@ function seedVocabulary(): void {
   for (const [adj, rule] of STARTER_VOCABULARY) {
     insertVocabulary(db, adj, rule, 1);
   }
+  db.prepare("UPDATE vocabulary SET rule_description = ? WHERE adjective = 'dark'").run(DARK_RULE);
   console.log(`Inserted ${STARTER_VOCABULARY.length} starter vocabulary terms.`);
 }
 
