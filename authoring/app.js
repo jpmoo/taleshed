@@ -42,7 +42,10 @@
   let cameraPitch = 0.2;
   const CAMERA_DIST_MIN = 20;
   const CAMERA_DIST_MAX = 400;
+  let stoneTextureCache = null; /* disposed when scene is rebuilt */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
+  const keysPressed = Object.create(null);
+  const PAN_SPEED = 1.5;
   let animationId = null;
 
   function showApiMessage(message) {
@@ -248,18 +251,18 @@
     listEl.appendChild(row);
   }
 
-  /** Block offset per direction (8 blocks center-to-center: 2.5 + 3 tunnel + 2.5). +X=east, +Y=up, +Z=north. */
+  /** Block offset per direction (8 blocks center-to-center). +X=east, +Y=up, +Z=south (north = -Z so N appears correct in view). */
   const DIR_OFFSET_BLOCKS = {
-    north: { x: 0, y: 0, z: 8 },
-    south: { x: 0, y: 0, z: -8 },
+    north: { x: 0, y: 0, z: -8 },
+    south: { x: 0, y: 0, z: 8 },
     east: { x: 8, y: 0, z: 0 },
     west: { x: -8, y: 0, z: 0 },
     up: { x: 0, y: 8, z: 0 },
     down: { x: 0, y: -8, z: 0 },
-    northeast: { x: 5.656854249492381, y: 0, z: 5.656854249492381 },
-    southeast: { x: 5.656854249492381, y: 0, z: -5.656854249492381 },
-    southwest: { x: -5.656854249492381, y: 0, z: -5.656854249492381 },
-    northwest: { x: -5.656854249492381, y: 0, z: 5.656854249492381 },
+    northeast: { x: 5.656854249492381, y: 0, z: -5.656854249492381 },
+    southeast: { x: 5.656854249492381, y: 0, z: 5.656854249492381 },
+    southwest: { x: -5.656854249492381, y: 0, z: 5.656854249492381 },
+    northwest: { x: -5.656854249492381, y: 0, z: -5.656854249492381 },
   };
 
   /** Assign grid_x, grid_y, grid_z (blocks) from exit graph. Root at (0,0,0); neighbors at +8 blocks in exit direction. */
@@ -381,9 +384,10 @@
   var HALF = LOCATION_SIZE / 2;
   var LOWEST_ROW_CENTER = -HALF + LABEL_STRIP_H / 2;
 
-  function addFaceLabelsForLocation(scene, gx, gy, gz, shortName, fullName, nodeId, isPlayer) {
-    var bgHex = isPlayer ? "66bb6a" : "f5f0e6";
-    var tex = makeFaceLabelTexture(shortName, bgHex);
+  function addFaceLabelsForLocation(scene, gx, gy, gz, nodeId, fullName, isPlayer) {
+    var bgHex = isPlayer ? "66bb6a" : "e8e4d8";
+    var labelText = String(nodeId).slice(0, 12);
+    var tex = makeFaceLabelTexture(labelText, bgHex);
     var mat = new THREE.MeshBasicMaterial({
       map: tex,
       transparent: false,
@@ -409,6 +413,35 @@
     }
   }
 
+  function makeStoneBlockTexture() {
+    var size = 128;
+    var block = 16;
+    var mortar = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    var ctx = canvas.getContext("2d");
+    var base = 0.92;
+    var mortarGray = 0.55;
+    for (var by = 0; by < size; by += block + mortar) {
+      for (var bx = 0; bx < size; bx += block + mortar) {
+        var v = base + (Math.random() - 0.5) * 0.12;
+        v = Math.max(0.7, Math.min(1, v));
+        var g = Math.round(v * 255);
+        ctx.fillStyle = "rgb(" + g + "," + g + "," + g + ")";
+        ctx.fillRect(bx, by, block, block);
+      }
+    }
+    ctx.fillStyle = "rgb(" + Math.round(mortarGray * 255) + "," + Math.round(mortarGray * 255) + "," + Math.round(mortarGray * 255) + ")";
+    for (var x = 0; x <= size; x += block + mortar) ctx.fillRect(x, 0, mortar, size);
+    for (var y = 0; y <= size; y += block + mortar) ctx.fillRect(0, y, size, mortar);
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 3);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
   function buildScene3D() {
     if (!scene3D || typeof THREE === "undefined") return;
     locationMeshes.forEach(function (o) {
@@ -421,6 +454,10 @@
       m.geometry.dispose();
       if (m.material) m.material.dispose();
     });
+    if (stoneTextureCache) {
+      stoneTextureCache.dispose();
+      stoneTextureCache = null;
+    }
     var disposedMats = new Set();
     labelMeshes.forEach(function (m) {
       scene3D.remove(m);
@@ -439,17 +476,21 @@
     const playerLocationId = (playerNode && playerNode.location_id) || null;
     const boxGeo = new THREE.BoxGeometry(LOCATION_SIZE, LOCATION_SIZE, LOCATION_SIZE);
     const tunnelGeo = new THREE.BoxGeometry(TUNNEL_CROSS, TUNNEL_CROSS, TUNNEL_LENGTH);
+    stoneTextureCache = makeStoneBlockTexture();
     const matDefault = new THREE.MeshPhongMaterial({
       color: 0xe8e4d8,
       emissive: 0x2a2a28,
+      map: stoneTextureCache,
     });
     const matCurrent = new THREE.MeshPhongMaterial({
       color: 0x66bb6a,
       emissive: 0x1a331a,
+      map: stoneTextureCache,
     });
     const matTunnel = new THREE.MeshPhongMaterial({
       color: 0x9a9a9a,
       emissive: 0x222222,
+      map: stoneTextureCache,
     });
 
     locations.forEach(function (loc) {
@@ -466,8 +507,7 @@
       scene3D.add(mesh);
       locationMeshes.push({ mesh: mesh, nodeId: loc.node_id });
 
-      var shortName = (loc.name || loc.node_id).slice(0, 12);
-      addFaceLabelsForLocation(scene3D, gx, gy, gz, shortName, loc.name || loc.node_id, loc.node_id, isPlayerLoc);
+      addFaceLabelsForLocation(scene3D, gx, gy, gz, loc.node_id, loc.name || loc.node_id, isPlayerLoc);
 
       const exits = parseExits(loc.exits);
       exits.forEach(function (e) {
@@ -508,9 +548,71 @@
     updateCameraPosition();
   }
 
+  var WORLD_AXES = {
+    N: new THREE.Vector3(0, 0, -1),
+    S: new THREE.Vector3(0, 0, 1),
+    E: new THREE.Vector3(1, 0, 0),
+    W: new THREE.Vector3(-1, 0, 0),
+    Up: new THREE.Vector3(0, 1, 0),
+    Down: new THREE.Vector3(0, -1, 0),
+  };
+
+  function updateOrientationWidget() {
+    var el = document.getElementById("graph-orientation");
+    if (!el || !camera3D) return;
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    var cx = w / 2;
+    var cy = h / 2;
+    var radius = Math.min(w, h) * 0.38;
+    var cam = camera3D;
+    var camPos = cam.position.clone();
+    var v = new THREE.Vector3();
+    var ids = ["graph-orient-n", "graph-orient-s", "graph-orient-e", "graph-orient-w", "graph-orient-up", "graph-orient-down"];
+    var keys = ["N", "S", "E", "W", "Up", "Down"];
+    for (var i = 0; i < ids.length; i++) {
+      var label = document.getElementById(ids[i]);
+      if (!label) continue;
+      v.copy(camPos).add(WORLD_AXES[keys[i]]);
+      v.project(cam);
+      var nx = v.x;
+      var ny = -v.y;
+      var px = cx + nx * radius;
+      var py = cy + ny * radius;
+      label.style.left = px + "px";
+      label.style.top = py + "px";
+      label.style.transform = "translate(-50%, -50%)";
+    }
+  }
+
+  function applyWasdPan() {
+    if (!camera3D || !focusPoint) return;
+    var el = document.activeElement;
+    var tag = el && el.tagName ? el.tagName.toUpperCase() : "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    var forward = new THREE.Vector3(
+      focusPoint.x - camera3D.position.x,
+      focusPoint.y - camera3D.position.y,
+      focusPoint.z - camera3D.position.z
+    );
+    var len = forward.length();
+    if (len < 1e-6) return;
+    forward.divideScalar(len);
+    var up = new THREE.Vector3(0, 1, 0);
+    var right = new THREE.Vector3().crossVectors(forward, up).normalize();
+    var move = 0;
+    if (keysPressed["KeyW"]) { focusPoint.x += forward.x * PAN_SPEED; focusPoint.y += forward.y * PAN_SPEED; focusPoint.z += forward.z * PAN_SPEED; move = 1; }
+    if (keysPressed["KeyS"]) { focusPoint.x -= forward.x * PAN_SPEED; focusPoint.y -= forward.y * PAN_SPEED; focusPoint.z -= forward.z * PAN_SPEED; move = 1; }
+    if (keysPressed["KeyD"]) { focusPoint.x += right.x * PAN_SPEED; focusPoint.y += right.y * PAN_SPEED; focusPoint.z += right.z * PAN_SPEED; move = 1; }
+    if (keysPressed["KeyA"]) { focusPoint.x -= right.x * PAN_SPEED; focusPoint.y -= right.y * PAN_SPEED; focusPoint.z -= right.z * PAN_SPEED; move = 1; }
+    if (move) updateCameraPosition();
+  }
+
   function animate() {
     if (!renderer3D || !scene3D || !camera3D) return;
+    applyWasdPan();
     renderer3D.render(scene3D, camera3D);
+    updateOrientationWidget();
     animationId = requestAnimationFrame(animate);
   }
 
@@ -567,6 +669,19 @@
       cameraDistance = Math.max(CAMERA_DIST_MIN, Math.min(CAMERA_DIST_MAX, cameraDistance + delta));
       updateCameraPosition();
     }, { passive: false });
+
+    window.addEventListener("keydown", function (e) {
+      if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD") {
+        keysPressed[e.code] = true;
+        e.preventDefault();
+      }
+    });
+    window.addEventListener("keyup", function (e) {
+      if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD") {
+        keysPressed[e.code] = false;
+        e.preventDefault();
+      }
+    });
 
     var tooltipEl = document.getElementById("graph-tooltip");
     canvas.addEventListener("mousemove", function (e) {
@@ -663,7 +778,7 @@
 
   // --- Panel switching ---
   const SUBTITLES = {
-    "panel-world-graph": "3D world: left-drag orbit, right-drag pan, wheel zoom. Click location to edit; use Add location to create (add exits to place it).",
+    "panel-world-graph": "3D world: left-drag orbit, right-drag pan, wheel zoom, W/A/S/D pan. Click location to edit; use Add location to create (add exits to place it).",
     "panel-history": "History ledger entries. Edit, add, or delete (with confirmation).",
     "panel-vocabulary": "Vocabulary terms. Edit, add, or delete (with confirmation).",
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",
