@@ -218,12 +218,19 @@ body {
   min-height: 0;
   cursor: grab;
   background: var(--paper);
-  display: flex;
 }
 
-/* Canvas: always content size (set in JS); margin auto centers in wrap when smaller, scrollable when larger */
+/* Inner wrapper: at least viewport-sized so scroll area is big enough to center canvas */
+.grid-canvas-wrap {
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Canvas: always content size (set in JS); centered inside grid-canvas-wrap */
 .grid-canvas {
-  margin: auto;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
