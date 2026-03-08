@@ -42,7 +42,7 @@
   const CAMERA_DIST_MIN = 20;
   const CAMERA_DIST_MAX = 400;
   let compassRose = null; /* 3D compass group; position updated each frame */
-  var compassLowerLeftNDC = new THREE.Vector3(-0.82, -0.82, 0.22); /* lower-left corner, reused for unproject */
+  var compassLowerLeftNDC = new THREE.Vector3(-0.62, -0.32, 0.22); /* lower-left, nudged right 10% and up 25% */
   let sceneDirectionalLight = null; /* light follows camera: viewer is the light source */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
   const keysPressed = Object.create(null);
@@ -607,7 +607,7 @@
     if (!renderer3D || !scene3D || !camera3D) return;
     applyWasdPan();
     if (compassRose && camera3D) {
-      compassLowerLeftNDC.set(-0.82, -0.82, 0.22);
+      compassLowerLeftNDC.set(-0.62, -0.32, 0.22);
       compassLowerLeftNDC.unproject(camera3D);
       compassRose.position.copy(compassLowerLeftNDC);
       compassRose.updateMatrixWorld(true);
