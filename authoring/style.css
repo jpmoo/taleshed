@@ -222,17 +222,15 @@ body {
 }
 
 .grid-canvas {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: relative;
   flex-shrink: 0;
-  min-width: 0;
-  min-height: 0;
 }
 
 .grid-zoom-wrapper {
-  flex-shrink: 0;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .grid-content {

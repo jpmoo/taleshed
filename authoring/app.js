@@ -34,7 +34,7 @@
   const ZOOM_MAX = 200;
   const ZOOM_STEP = 5;
   /** Extra pixels on canvas so there is always scroll room for centering and pan */
-  const PAN_MARGIN = 200;
+  const PAN_MARGIN = 400;
   let zoomPercent = 100;
   let contentWidth = 0;
   let contentHeight = 0;
@@ -313,13 +313,16 @@
     if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
   }
 
+  var refWrapW = 0;
+  var refWrapH = 0;
+
   var lastApplyWrapW = 0;
   var lastApplyWrapH = 0;
   var lastApplyZoomPercent = 0;
   var lastApplyZoomTime = 0;
   var applyZoomThrottleMs = 400;
 
-  /** Set zoom wrapper size, canvas size (at least viewport and content + PAN_MARGIN), then center scroll. */
+  /** Set zoom wrapper size, canvas size (from ref viewport so scrollbars don't shrink it), then center scroll. */
   function applyZoom() {
     const wrap = document.getElementById("grid-wrap");
     const canvas = document.getElementById("grid-canvas");
@@ -339,20 +342,24 @@
     const w = wrap.clientWidth || 0;
     const h = wrap.clientHeight || 0;
     if (w < 1 || h < 1) return;
+    if (refWrapW < 1 || refWrapH < 1) {
+      refWrapW = w;
+      refWrapH = h;
+    }
     /* Skip canvas/scroll only if wrap size and zoom are unchanged (zoom must always update). */
     if (w === lastApplyWrapW && h === lastApplyWrapH && zoomPercent === lastApplyZoomPercent) return;
     lastApplyWrapW = w;
     lastApplyWrapH = h;
     lastApplyZoomPercent = zoomPercent;
     lastApplyZoomTime = Date.now();
-    /* Canvas must fit scaled content and have margin; prevent shrink so vertical scroll works. */
-    const cw = Math.max(w, sw) + PAN_MARGIN;
-    const ch = Math.max(h, sh) + PAN_MARGIN;
+    /* Canvas size from ref viewport so scrollbars don't shrink canvas and kill vertical pan. */
+    const cw = Math.max(refWrapW, sw) + PAN_MARGIN;
+    const ch = Math.max(refWrapH, sh) + PAN_MARGIN;
     canvas.style.minWidth = cw + "px";
     canvas.style.minHeight = ch + "px";
     canvas.style.width = cw + "px";
     canvas.style.height = ch + "px";
-    /* Set scroll to center the viewport on the canvas. */
+    /* Center scroll in visible viewport (use current w/h for scroll math). */
     const maxScrollLeft = Math.max(0, cw - w);
     const maxScrollTop = Math.max(0, ch - h);
     if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
@@ -667,6 +674,8 @@
     }
     window.addEventListener("resize", function () {
       if (!document.getElementById("panel-world-graph").classList.contains("active")) return;
+      refWrapW = 0;
+      refWrapH = 0;
       lastApplyZoomPercent = 0;
       applyZoom();
     });
