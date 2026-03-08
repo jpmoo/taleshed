@@ -223,7 +223,7 @@ body {
   align-items: center;
 }
 
-/* Canvas: JS sets to max(viewport, content) when wrap has size so it fills view and centers content; grid on canvas */
+/* Canvas: JS sets to max(viewport, content) when wrap has size so it fills view and centers content */
 .grid-canvas {
   margin: auto;
   flex-shrink: 0;
@@ -232,11 +232,6 @@ body {
   align-items: center;
   min-width: 0;
   min-height: 0;
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: var(--block) var(--block);
-  background-position: 0 0;
 }
 
 .grid-zoom-wrapper {

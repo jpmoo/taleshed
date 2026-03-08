@@ -356,13 +356,12 @@
     if (wrap && canvas) {
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
-      if (w > 0 && h > 0) {
-        canvas.style.width = Math.max(w, sw) + "px";
-        canvas.style.height = Math.max(h, sh) + "px";
-      } else {
-        canvas.style.width = Math.max(1, sw) + "px";
-        canvas.style.height = Math.max(1, sh) + "px";
+      if (w <= 0 || h <= 0) {
+        w = document.documentElement.clientWidth || window.innerWidth || 800;
+        h = document.documentElement.clientHeight || window.innerHeight || 600;
       }
+      canvas.style.width = Math.max(w, sw) + "px";
+      canvas.style.height = Math.max(h, sh) + "px";
     }
   }
 
@@ -465,10 +464,17 @@
       return;
     }
 
+    function getClientX(e) {
+      return e.touches ? e.touches[0].clientX : e.clientX;
+    }
+    function getClientY(e) {
+      return e.touches ? e.touches[0].clientY : e.clientY;
+    }
+
     function onMove(e) {
       if (panState) {
-        wrap.scrollLeft = panState.startScrollLeft + (panState.startX - e.clientX);
-        wrap.scrollTop = panState.startScrollTop + (panState.startY - e.clientY);
+        wrap.scrollLeft = panState.startScrollLeft + (panState.startX - getClientX(e));
+        wrap.scrollTop = panState.startScrollTop + (panState.startY - getClientY(e));
       }
     }
 
@@ -476,25 +482,42 @@
       panState = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove, { passive: false });
+      document.removeEventListener("touchend", onUp);
+      document.removeEventListener("touchcancel", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     }
 
-    wrap.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return;
-      const onBox = e.target.closest(".location-box");
-      if (onBox) return;
+    function startPan(clientX, clientY) {
       panState = {
         startScrollLeft: wrap.scrollLeft,
         startScrollTop: wrap.scrollTop,
-        startX: e.clientX,
-        startY: e.clientY,
+        startX: clientX,
+        startY: clientY,
       };
       document.body.style.cursor = "grabbing";
       document.body.style.userSelect = "none";
+    }
+
+    wrap.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".location-box")) return;
+      e.preventDefault();
+      startPan(e.clientX, e.clientY);
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     });
+
+    wrap.addEventListener("touchstart", (e) => {
+      if (e.target.closest(".location-box")) return;
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      startPan(e.touches[0].clientX, e.touches[0].clientY);
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onUp);
+      document.addEventListener("touchcancel", onUp);
+    }, { passive: false });
 
     wrap.addEventListener("mouseover", (e) => {
       if (panState) return;
