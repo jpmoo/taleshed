@@ -212,96 +212,24 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
-/* World graph: wrap is scroll container; min-height 0 so it doesn't grow with canvas. */
+/* World graph: 3D canvas fills the wrap. */
 .grid-wrap {
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
   cursor: grab;
-  background: var(--paper);
+  background: #1a1a1a;
 }
 
-.grid-canvas {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-shrink: 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.grid-zoom-wrapper {
-  flex-shrink: 0;
-  position: relative;
-}
-
-.grid-content {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  transform-origin: 0 0;
-}
-
-.exit-lines {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+.world-graph-canvas {
   display: block;
-}
-.exit-lines line {
-  stroke: var(--ink);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.locations-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
-}
-.locations-layer .location-box {
-  pointer-events: auto;
+  outline: none;
 }
 
-.location-box {
-  position: absolute;
-  width: var(--box);
-  min-height: var(--box);
-  background: var(--white);
-  border: 2px solid var(--ink);
-  border-radius: 2px;
-  box-shadow: 2px 2px 6px var(--shadow);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  cursor: pointer;
-  font-size: 0.7rem;
-  line-height: 1.2;
-  text-align: center;
-  word-break: break-word;
-}
-.location-box:hover {
-  background: #f8f6f0;
-  border-color: var(--accent);
-  box-shadow: 2px 2px 8px rgba(0,0,0,0.18);
-}
-.location-box.current-location {
-  background: #c8e6c9;
-  border-color: #2e7d32;
-}
-.location-box.current-location:hover {
-  background: #a5d6a7;
-  border-color: #2e7d32;
-}
-.grid-wrap .location-box {
-  cursor: pointer;
+.grid-wrap:active {
+  cursor: grabbing;
 }
 
 /* Modal */
@@ -450,3 +378,4 @@ body {
 }
 .btn-add-exit:hover { filter: brightness(1.08); }
 .exits-section.hidden { display: none; }
+.modal-move-player-wrap.hidden { display: none; }

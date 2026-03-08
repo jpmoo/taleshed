@@ -69,11 +69,11 @@ export function initDatabase(dbPath?: string): Database.Database {
     db.exec("ALTER TABLE world_graph ADD COLUMN exits TEXT NOT NULL DEFAULT '[]'");
   }
 
-  // Migration: add grid position for authoring (locations on graph paper)
-  for (const col of ["grid_x", "grid_y"]) {
+  // Migration: add grid position for authoring (locations in 3D blocks)
+  for (const col of ["grid_x", "grid_y", "grid_z"]) {
     const has = db.prepare("SELECT 1 FROM pragma_table_info('world_graph') WHERE name = ?").get(col);
     if (!has) {
-      db.exec(`ALTER TABLE world_graph ADD COLUMN ${col} INTEGER`);
+      db.exec(`ALTER TABLE world_graph ADD COLUMN ${col} REAL`);
     }
   }
 
@@ -91,11 +91,12 @@ export interface WorldNode {
   location_id: string | null;
   is_active: number;
   meta: string | null;
-  /** JSON array of { label: string, target: string, direction?: 'north'|'south'|'east'|'west' } for location nodes; default '[]' */
+  /** JSON array of { label: string, target: string, direction?: 'north'|'south'|'east'|'west'|'northeast'|'southeast'|'southwest'|'northwest'|'up'|'down' } for location nodes; default '[]' */
   exits?: string;
-  /** Authoring: grid position for locations (graph paper) */
+  /** Authoring: grid position for locations in 3D (blocks) */
   grid_x?: number | null;
   grid_y?: number | null;
+  grid_z?: number | null;
 }
 
 export interface HistoryEntry {

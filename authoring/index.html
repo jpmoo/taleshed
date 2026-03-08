@@ -5,32 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TaleShed — Authoring</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <header class="header">
     <h1>TaleShed Authoring</h1>
-    <p class="subtitle" id="subtitle">Double-click empty space to add a room; drag rooms to move (exits stay connected); drag empty space to pan.</p>
+    <p class="subtitle" id="subtitle">3D World Graph: Add location to create; click a location to edit. Player location is green.</p>
     <div id="api-warn" class="api-warn hidden">Add <code>?api=YOUR_KEY</code> to the URL to load data.</div>
   </header>
   <main class="main-content">
     <div id="panel-world-graph" class="panel active">
       <div class="world-graph-toolbar">
+        <button type="button" class="btn btn-add" id="world-graph-add-location">Add location</button>
         <div class="zoom-controls" aria-label="Zoom">
-          <button type="button" class="btn btn-zoom" id="zoom-out" title="Zoom out 5%">−</button>
-          <input type="number" id="zoom-percent" class="zoom-percent-input" min="25" max="200" step="5" value="100" aria-label="Zoom percentage" />
-          <span class="zoom-percent-suffix">%</span>
-          <button type="button" class="btn btn-zoom" id="zoom-in" title="Zoom in 5%">+</button>
+          <button type="button" class="btn btn-zoom" id="zoom-out" title="Zoom out">−</button>
+          <input type="number" id="zoom-percent" class="zoom-percent-input" min="20" max="400" step="5" value="80" aria-label="Camera distance (blocks)" />
+          <span class="zoom-percent-suffix">blocks</span>
+          <button type="button" class="btn btn-zoom" id="zoom-in" title="Zoom in">+</button>
         </div>
       </div>
       <div id="grid-wrap" class="grid-wrap">
-        <div id="grid-canvas" class="grid-canvas">
-          <div id="grid-zoom-wrapper" class="grid-zoom-wrapper">
-            <div id="grid-content" class="grid-content">
-              <svg id="exit-lines" class="exit-lines" aria-hidden="true"></svg>
-              <div id="locations-layer" class="locations-layer"></div>
-            </div>
-          </div>
-        </div>
+        <canvas id="world-graph-canvas" class="world-graph-canvas" aria-label="3D World Graph"></canvas>
       </div>
     </div>
     <div id="panel-history" class="panel">
@@ -129,6 +124,10 @@
         <label for="edit-grid_y">grid_y</label>
         <input type="number" id="edit-grid_y" name="grid_y" step="1" placeholder="0" />
       </div>
+      <div class="field">
+        <label for="edit-grid_z">grid_z</label>
+        <input type="number" id="edit-grid_z" name="grid_z" step="1" placeholder="0" />
+      </div>
       <div class="field exits-section" id="exits-section">
         <label>Exits</label>
         <p class="field-hint">Location only. One exit per direction. Changes sync to the target room.</p>
@@ -136,6 +135,9 @@
         <button type="button" class="btn btn-sm btn-add-exit" id="exits-add">+ Add exit</button>
       </div>
       <input type="hidden" id="edit-exits" name="exits" />
+      <div class="field modal-move-player-wrap hidden" id="modal-move-player-wrap">
+        <button type="button" class="btn btn-secondary" id="modal-move-player">Move player here</button>
+      </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-save">Save</button>
         <button type="button" class="btn btn-delete" id="modal-delete">Delete</button>

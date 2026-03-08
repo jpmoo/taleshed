@@ -29,13 +29,22 @@ const HOST = process.env["TALESHED_WEB_IP"] ?? "0.0.0.0";
 const dbPath = getDbPath();
 const db = initDatabase(dbPath);
 
-const DIRECTIONS = ["north", "south", "east", "west"] as const;
+const DIRECTIONS = [
+  "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
+  "up", "down",
+] as const;
 function oppositeDirection(d: string): string {
   const lower = (d || "").toLowerCase();
   if (lower === "north") return "south";
   if (lower === "south") return "north";
   if (lower === "east") return "west";
   if (lower === "west") return "east";
+  if (lower === "northeast") return "southwest";
+  if (lower === "southwest") return "northeast";
+  if (lower === "southeast") return "northwest";
+  if (lower === "northwest") return "southeast";
+  if (lower === "up") return "down";
+  if (lower === "down") return "up";
   return "";
 }
 
@@ -167,6 +176,7 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     let exits = typeof body.exits === "string" ? body.exits : JSON.stringify(body.exits ?? []);
     const grid_x = body.grid_x != null ? Number(body.grid_x) : null;
     const grid_y = body.grid_y != null ? Number(body.grid_y) : null;
+    const grid_z = body.grid_z != null ? Number(body.grid_z) : null;
 
     if (node_type === "location") {
       const oldExits = parseExitsJson(existingRow.exits);
@@ -191,8 +201,8 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     }
 
     db.prepare(
-      `UPDATE world_graph SET node_type = ?, name = ?, base_description = ?, adjectives = ?, location_id = ?, is_active = ?, meta = ?, exits = ?, grid_x = ?, grid_y = ? WHERE node_id = ?`
-    ).run(node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, nodeId);
+      `UPDATE world_graph SET node_type = ?, name = ?, base_description = ?, adjectives = ?, location_id = ?, is_active = ?, meta = ?, exits = ?, grid_x = ?, grid_y = ?, grid_z = ? WHERE node_id = ?`
+    ).run(node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z, nodeId);
     const row = db.prepare("SELECT * FROM world_graph WHERE node_id = ?").get(nodeId) as WorldNode;
     res.json(row);
   } catch (e) {
@@ -228,11 +238,12 @@ app.post("/api/world-graph", (req: Request, res: Response) => {
     const exits = typeof body.exits === "string" ? body.exits : JSON.stringify(body.exits ?? []);
     const grid_x = body.grid_x != null ? Number(body.grid_x) : null;
     const grid_y = body.grid_y != null ? Number(body.grid_y) : null;
+    const grid_z = body.grid_z != null ? Number(body.grid_z) : null;
 
     db.prepare(
-      `INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y);
+      `INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z);
     if (node_type === "location") {
       const newExits = parseExitsJson(exits);
       for (const e of newExits) {

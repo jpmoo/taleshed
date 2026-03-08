@@ -1,11 +1,11 @@
 (function () {
   "use strict";
 
-  const BLOCK = 18;
-  const CELL = 7;
-  const SLOT = CELL * BLOCK;
-  const BOX = 5 * BLOCK;
-  const LINE_LEN = 2 * BLOCK;
+  /** 3D world: 1 unit = 1 block. Location = 5x5x5, tunnel = 1x1x3. */
+  const LOCATION_SIZE = 5;
+  const TUNNEL_LENGTH = 3;
+  const TUNNEL_CROSS = 1;
+  const BLOCKS_PER_EXIT = 8; /* center-to-center: 2.5 + 3 + 2.5 */
 
   /** Base URL for API (e.g. "" for same origin, or "/taleshed" if behind a path proxy). Set window.TALESHED_API_BASE if needed. */
   function getApiBase() {
@@ -26,18 +26,24 @@
 
   let allNodes = [];
   let locations = [];
-  let minGridX = 0;
-  let minGridY = 0;
   let skipNextClick = false;
-  let panState = null;
-  const ZOOM_MIN = 25;
-  const ZOOM_MAX = 200;
-  const ZOOM_STEP = 5;
-  /** Extra pixels on canvas so there is always scroll room for centering and pan */
-  const PAN_MARGIN = 400;
-  let zoomPercent = 100;
-  let contentWidth = 0;
-  let contentHeight = 0;
+
+  /* 3D scene */
+  let scene3D = null;
+  let camera3D = null;
+  let renderer3D = null;
+  let canvas3D = null;
+  let locationMeshes = []; /* { mesh, nodeId } for raycast */
+  let tunnelMeshes = [];
+  let labelMeshes = [];
+  const focusPoint = { x: 0, y: 0, z: 0 };
+  let cameraDistance = 80;
+  let cameraYaw = 0.4;
+  let cameraPitch = 0.2;
+  const CAMERA_DIST_MIN = 20;
+  const CAMERA_DIST_MAX = 400;
+  let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
+  let animationId = null;
 
   function showApiMessage(message) {
     var warn = document.getElementById("api-warn");
@@ -79,7 +85,7 @@
       });
   }
 
-  const DIRECTIONS = ["north", "south", "east", "west"];
+  const DIRECTIONS = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"];
 
   function parseExits(str) {
     if (!str || !str.trim()) return [];
@@ -242,14 +248,28 @@
     listEl.appendChild(row);
   }
 
-  /** Assign grid_x, grid_y to locations from exit graph. Root at (0,0); neighbors placed by direction (north=above, east=right, etc.). */
+  /** Block offset per direction (8 blocks center-to-center: 2.5 + 3 tunnel + 2.5). +X=east, +Y=up, +Z=north. */
+  const DIR_OFFSET_BLOCKS = {
+    north: { x: 0, y: 0, z: 8 },
+    south: { x: 0, y: 0, z: -8 },
+    east: { x: 8, y: 0, z: 0 },
+    west: { x: -8, y: 0, z: 0 },
+    up: { x: 0, y: 8, z: 0 },
+    down: { x: 0, y: -8, z: 0 },
+    northeast: { x: 5.656854249492381, y: 0, z: 5.656854249492381 },
+    southeast: { x: 5.656854249492381, y: 0, z: -5.656854249492381 },
+    southwest: { x: -5.656854249492381, y: 0, z: -5.656854249492381 },
+    northwest: { x: -5.656854249492381, y: 0, z: 5.656854249492381 },
+  };
+
+  /** Assign grid_x, grid_y, grid_z (blocks) from exit graph. Root at (0,0,0); neighbors at +8 blocks in exit direction. */
   function computeLayoutFromExits() {
     const locById = new Map(locations.map((l) => [l.node_id, l]));
     const pos = new Map();
     const queue = [];
     const first = locations[0];
     if (!first) return;
-    pos.set(first.node_id, { x: 0, y: 0 });
+    pos.set(first.node_id, { x: 0, y: 0, z: 0 });
     queue.push(first.node_id);
     while (queue.length) {
       const nodeId = queue.shift();
@@ -262,352 +282,276 @@
         if (!targetId || !locById.has(targetId)) continue;
         if (pos.has(targetId)) continue;
         const dir = (e.direction || "").toLowerCase();
-        let dx = 0, dy = 0;
-        if (dir === "north") dy = -1;
-        else if (dir === "south") dy = 1;
-        else if (dir === "east") dx = 1;
-        else if (dir === "west") dx = -1;
-        else continue;
-        pos.set(targetId, { x: p.x + dx, y: p.y + dy });
+        const off = DIR_OFFSET_BLOCKS[dir];
+        if (!off) continue;
+        pos.set(targetId, { x: p.x + off.x, y: p.y + off.y, z: p.z + off.z });
         queue.push(targetId);
       }
     }
-    let fallbackX = 0;
-    for (const loc of locations) {
-      const p = pos.get(loc.node_id);
+    var minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
+    var hasPlaced = false;
+    pos.forEach(function (p) {
+      if (!hasPlaced) { minX = maxX = p.x; minY = maxY = p.y; minZ = maxZ = p.z; hasPlaced = true; }
+      else {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+      }
+    });
+    var edgeOffset = BLOCKS_PER_EXIT;
+    var fallback = 0;
+    for (var i = 0; i < locations.length; i++) {
+      var loc = locations[i];
+      var p = pos.get(loc.node_id);
       if (p != null) {
         loc.grid_x = p.x;
         loc.grid_y = p.y;
+        loc.grid_z = p.z;
       } else {
-        loc.grid_x = fallbackX++;
-        loc.grid_y = 1;
+        loc.grid_x = hasPlaced ? maxX + edgeOffset + fallback * edgeOffset : fallback * edgeOffset;
+        loc.grid_y = 0;
+        loc.grid_z = 0;
+        fallback++;
       }
     }
   }
 
-  /** Map viewport position to content (grid) coordinates. Canvas centers the zoom wrapper. */
-  function eventToSlot(wrap, clientX, clientY) {
-    const rect = wrap.getBoundingClientRect();
-    const canvas = document.getElementById("grid-canvas");
-    const scale = zoomPercent / 100;
-    const sw = Math.round(contentWidth * scale);
-    const sh = Math.round(contentHeight * scale);
-    const canvasW = canvas ? canvas.offsetWidth : wrap.scrollWidth;
-    const canvasH = canvas ? canvas.offsetHeight : wrap.scrollHeight;
-    const wrapperLeft = canvasW / 2 - sw / 2;
-    const wrapperTop = canvasH / 2 - sh / 2;
-    const layerX = (wrap.scrollLeft + (clientX - rect.left) - wrapperLeft) / scale;
-    const layerY = (wrap.scrollTop + (clientY - rect.top) - wrapperTop) / scale;
-    const sx = minGridX + Math.floor(layerX / SLOT);
-    const sy = minGridY + Math.floor(layerY / SLOT);
-    return { gx: sx, gy: sy };
-  }
-
-  function centerMapScroll() {
+  function initScene3D() {
+    if (typeof THREE === "undefined") return;
+    canvas3D = document.getElementById("world-graph-canvas");
+    if (!canvas3D) return;
     const wrap = document.getElementById("grid-wrap");
     if (!wrap) return;
-    wrap.offsetHeight; /* force reflow */
-    const maxScrollLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-    const maxScrollTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
-    if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
-    if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
+    scene3D = new THREE.Scene();
+    scene3D.background = new THREE.Color(0x1a1a1a);
+    const aspect = Math.max(1, wrap.clientWidth / wrap.clientHeight);
+    camera3D = new THREE.PerspectiveCamera(50, aspect, 1, 2000);
+    renderer3D = new THREE.WebGLRenderer({ canvas: canvas3D, antialias: true });
+    renderer3D.setPixelRatio(window.devicePixelRatio || 1);
+    renderer3D.setSize(wrap.clientWidth, wrap.clientHeight);
+    /* point light from camera side */
+    const light = new THREE.DirectionalLight(0xffffff, 0.9);
+    light.position.set(20, 40, 30);
+    scene3D.add(light);
+    scene3D.add(new THREE.AmbientLight(0x404060, 0.5));
+    updateCameraPosition();
+    setup3DControls();
   }
 
-  var refWrapW = 0;
-  var refWrapH = 0;
-
-  var lastApplyWrapW = 0;
-  var lastApplyWrapH = 0;
-  var lastApplyZoomPercent = 0;
-  var lastApplyZoomTime = 0;
-  var applyZoomThrottleMs = 400;
-
-  /** Set zoom wrapper size, canvas size (from ref viewport so scrollbars don't shrink it), then center scroll. */
-  function applyZoom() {
-    const wrap = document.getElementById("grid-wrap");
-    const canvas = document.getElementById("grid-canvas");
-    const wrapper = document.getElementById("grid-zoom-wrapper");
-    const content = document.getElementById("grid-content");
-    const input = document.getElementById("zoom-percent");
-    if (!wrapper || !content) return;
-    if (!contentWidth || !contentHeight) return;
-    const scale = zoomPercent / 100;
-    const sw = Math.round(contentWidth * scale);
-    const sh = Math.round(contentHeight * scale);
-    wrapper.style.width = sw + "px";
-    wrapper.style.height = sh + "px";
-    content.style.transform = "scale(" + scale + ")";
-    if (input) input.value = zoomPercent;
-    if (!wrap || !canvas) return;
-    const w = wrap.clientWidth || 0;
-    const h = wrap.clientHeight || 0;
-    if (w >= 1 && h >= 1) {
-      if (refWrapW < 1 || refWrapH < 1) {
-        refWrapW = w;
-        refWrapH = h;
-      }
-    }
-    /* When wrap has no size yet, use content size so canvas isn't 0 and something shows. */
-    const viewW = refWrapW >= 1 ? refWrapW : sw;
-    const viewH = refWrapH >= 1 ? refWrapH : sh;
-    /* Skip canvas/scroll only if wrap size and zoom are unchanged (zoom must always update). */
-    if (w >= 1 && h >= 1 && w === lastApplyWrapW && h === lastApplyWrapH && zoomPercent === lastApplyZoomPercent) return;
-    lastApplyWrapW = w;
-    lastApplyWrapH = h;
-    lastApplyZoomPercent = zoomPercent;
-    lastApplyZoomTime = Date.now();
-    /* Canvas size from ref viewport so scrollbars don't shrink canvas and kill vertical pan. */
-    const cw = Math.max(viewW, sw) + PAN_MARGIN;
-    const ch = Math.max(viewH, sh) + PAN_MARGIN;
-    canvas.style.minWidth = cw + "px";
-    canvas.style.minHeight = ch + "px";
-    canvas.style.width = cw + "px";
-    canvas.style.height = ch + "px";
-    /* Center scroll in visible viewport when we have wrap size. */
-    if (w >= 1 && h >= 1) {
-      const maxScrollLeft = Math.max(0, cw - w);
-      const maxScrollTop = Math.max(0, ch - h);
-      if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
-      if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
-    }
+  function updateCameraPosition() {
+    if (!camera3D) return;
+    const x = focusPoint.x + cameraDistance * Math.cos(cameraPitch) * Math.sin(cameraYaw);
+    const y = focusPoint.y + cameraDistance * Math.sin(cameraPitch);
+    const z = focusPoint.z + cameraDistance * Math.cos(cameraPitch) * Math.cos(cameraYaw);
+    camera3D.position.set(x, y, z);
+    camera3D.lookAt(focusPoint.x, focusPoint.y, focusPoint.z);
+    camera3D.updateMatrixWorld(true);
   }
 
-  function setZoomPercent(value) {
-    const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(Number(value)) || 100));
-    if (next === zoomPercent) return;
-    zoomPercent = next;
-    lastApplyZoomPercent = 0;
-    applyZoom();
+  function makeLabelTexture(name) {
+    const w = 256;
+    const h = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#f5f0e6";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#1a1a1a";
+    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(name).slice(0, 24), w / 2, h / 2);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
   }
 
-  function render() {
-    const wrap = document.getElementById("grid-wrap");
-    const content = document.getElementById("grid-content");
-    const svg = document.getElementById("exit-lines");
-    const layer = document.getElementById("locations-layer");
-    if (!content || !layer) return;
-
-    const minX = Math.min(0, ...locations.map((l) => l.grid_x ?? 0));
-    const minY = Math.min(0, ...locations.map((l) => l.grid_y ?? 0));
-    minGridX = minX;
-    minGridY = minY;
-    const maxX = Math.max(0, ...locations.map((l) => (l.grid_x ?? 0) + 1));
-    const maxY = Math.max(0, ...locations.map((l) => (l.grid_y ?? 0) + 1));
-    const width = (maxX - minX + 1) * SLOT + BOX;
-    const height = (maxY - minY + 1) * SLOT + BOX;
-
-    contentWidth = width;
-    contentHeight = height;
-    content.style.width = width + "px";
-    content.style.height = height + "px";
-    layer.innerHTML = "";
-
-    // Exit lines (2 blocks from edge of box)
-    const pathParts = [];
-    locations.forEach((loc) => {
-      const gx = loc.grid_x ?? 0;
-      const gy = loc.grid_y ?? 0;
-      const exits = parseExits(loc.exits);
-      const baseX = (gx - minX) * SLOT;
-      const baseY = (gy - minY) * SLOT;
-      const centerX = baseX + BOX / 2;
-      const centerY = baseY + BOX / 2;
-
-      exits.forEach((e) => {
-        const dir = (e.direction || "").toLowerCase();
-        let x1, y1, x2, y2;
-        if (dir === "north") {
-          x1 = centerX; y1 = baseY;
-          x2 = centerX; y2 = y1 - LINE_LEN;
-        } else if (dir === "south") {
-          x1 = centerX; y1 = baseY + BOX;
-          x2 = centerX; y2 = y1 + LINE_LEN;
-        } else if (dir === "east") {
-          x1 = baseX + BOX; y1 = centerY;
-          x2 = x1 + LINE_LEN; y2 = centerY;
-        } else if (dir === "west") {
-          x1 = baseX; y1 = centerY;
-          x2 = x1 - LINE_LEN; y2 = centerY;
-        } else return;
-        pathParts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`);
-      });
+  function buildScene3D() {
+    if (!scene3D || typeof THREE === "undefined") return;
+    locationMeshes.forEach(function (o) {
+      scene3D.remove(o.mesh);
+      o.mesh.geometry.dispose();
+      if (o.mesh.material) o.mesh.material.dispose();
     });
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    svg.setAttribute("width", width);
-    svg.setAttribute("height", height);
-    svg.innerHTML = pathParts.join("");
+    tunnelMeshes.forEach(function (m) {
+      scene3D.remove(m);
+      m.geometry.dispose();
+      if (m.material) m.material.dispose();
+    });
+    labelMeshes.forEach(function (m) {
+      scene3D.remove(m);
+      m.geometry.dispose();
+      if (m.material && m.material.map) m.material.map.dispose();
+      if (m.material) m.material.dispose();
+    });
+    locationMeshes = [];
+    tunnelMeshes = [];
+    labelMeshes = [];
 
-    const playerNode = allNodes.find((n) => n.node_id === "player");
+    const playerNode = allNodes.find(function (n) { return n.node_id === "player"; });
     const playerLocationId = (playerNode && playerNode.location_id) || null;
+    const boxGeo = new THREE.BoxGeometry(LOCATION_SIZE, LOCATION_SIZE, LOCATION_SIZE);
+    const tunnelGeo = new THREE.BoxGeometry(TUNNEL_CROSS, TUNNEL_CROSS, TUNNEL_LENGTH);
+    const matDefault = new THREE.MeshPhongMaterial({ color: 0xf5f0e6 });
+    const matCurrent = new THREE.MeshPhongMaterial({ color: 0x66bb6a });
+    const matTunnel = new THREE.MeshPhongMaterial({ color: 0x8d8d8d });
 
-    locations.forEach((loc) => {
-      const gx = loc.grid_x ?? 0;
-      const gy = loc.grid_y ?? 0;
-      const left = (gx - minX) * SLOT;
-      const top = (gy - minY) * SLOT;
-      const box = document.createElement("div");
-      box.className = "location-box" + (loc.node_id === playerLocationId ? " current-location" : "");
-      box.textContent = loc.name || loc.node_id;
-      box.style.left = left + "px";
-      box.style.top = top + "px";
-      box.dataset.nodeId = loc.node_id;
-      box.addEventListener("click", () => {
-        if (skipNextClick) {
-          skipNextClick = false;
-          return;
-        }
-        openModal(loc.node_id);
+    locations.forEach(function (loc) {
+      const gx = Number(loc.grid_x) || 0;
+      const gy = Number(loc.grid_y) || 0;
+      const gz = Number(loc.grid_z) || 0;
+      const mesh = new THREE.Mesh(
+        boxGeo.clone(),
+        loc.node_id === playerLocationId ? matCurrent : matDefault
+      );
+      mesh.position.set(gx, gy, gz);
+      mesh.userData = { nodeId: loc.node_id };
+      scene3D.add(mesh);
+      locationMeshes.push({ mesh: mesh, nodeId: loc.node_id });
+
+      var labelTex = makeLabelTexture(loc.name || loc.node_id);
+      var labelMat = new THREE.MeshBasicMaterial({
+        map: labelTex,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
       });
-      layer.appendChild(box);
+      var labelGeo = new THREE.PlaneGeometry(4, 0.8);
+      var labelPlane = new THREE.Mesh(labelGeo, labelMat);
+      labelPlane.position.set(gx, gy - LOCATION_SIZE / 2 - 0.01, gz);
+      labelPlane.rotation.x = -Math.PI / 2;
+      labelPlane.userData = { nodeId: loc.node_id };
+      scene3D.add(labelPlane);
+      labelMeshes.push(labelPlane);
+
+      const exits = parseExits(loc.exits);
+      exits.forEach(function (e) {
+        const dir = (e.direction || "").toLowerCase();
+        const off = DIR_OFFSET_BLOCKS[dir];
+        if (!off) return;
+        const len = Math.sqrt(off.x * off.x + off.y * off.y + off.z * off.z);
+        if (len < 0.1) return;
+        const nx = off.x / len;
+        const ny = off.y / len;
+        const nz = off.z / len;
+        const tunnel = new THREE.Mesh(tunnelGeo.clone(), matTunnel);
+        tunnel.position.set(
+          gx + (LOCATION_SIZE / 2 + TUNNEL_LENGTH / 2) * nx,
+          gy + (LOCATION_SIZE / 2 + TUNNEL_LENGTH / 2) * ny,
+          gz + (LOCATION_SIZE / 2 + TUNNEL_LENGTH / 2) * nz
+        );
+        tunnel.rotation.y = Math.atan2(nx, nz);
+        tunnel.rotation.x = -Math.asin(ny);
+        scene3D.add(tunnel);
+        tunnelMeshes.push(tunnel);
+      });
     });
-    lastApplyZoomPercent = 0;
-    applyZoom();
-    requestAnimationFrame(function () {
-      applyZoom();
-    });
+
+    /* center focus on locations */
+    if (locations.length > 0) {
+      let sx = 0, sy = 0, sz = 0;
+      locations.forEach(function (l) {
+        sx += Number(l.grid_x) || 0;
+        sy += Number(l.grid_y) || 0;
+        sz += Number(l.grid_z) || 0;
+      });
+      focusPoint.x = sx / locations.length;
+      focusPoint.y = sy / locations.length;
+      focusPoint.z = sz / locations.length;
+    }
+    updateCameraPosition();
   }
 
-  function setupPanAndDrag() {
+  function animate() {
+    if (!renderer3D || !scene3D || !camera3D) return;
+    renderer3D.render(scene3D, camera3D);
+    animationId = requestAnimationFrame(animate);
+  }
+
+  function setup3DControls() {
     const wrap = document.getElementById("grid-wrap");
-    if (!wrap) {
-      console.warn("TaleShed: grid-wrap not found, pan/drag/dblclick disabled.");
-      return;
+    const canvas = document.getElementById("world-graph-canvas");
+    if (!wrap || !canvas) return;
+
+    function getSize() {
+      return { w: wrap.clientWidth, h: wrap.clientHeight };
     }
 
-    function onMove(e) {
-      if (!panState) return;
-      var maxScrollX = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-      var maxScrollY = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
-      var newLeft = panState.startScrollLeft + (panState.startX - e.clientX);
-      var newTop = panState.startScrollTop + (panState.startY - e.clientY);
-      wrap.scrollLeft = Math.max(0, Math.min(maxScrollX, newLeft));
-      wrap.scrollTop = Math.max(0, Math.min(maxScrollY, newTop));
-    }
+    wrap.addEventListener("resize", function () {
+      if (!camera3D || !renderer3D) return;
+      const s = getSize();
+      camera3D.aspect = s.w / s.h;
+      camera3D.updateProjectionMatrix();
+      renderer3D.setSize(s.w, s.h);
+    });
 
-    function onUp() {
-      panState = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    }
+    canvas.addEventListener("mousedown", function (e) {
+      if (e.target !== canvas) return;
+      if (e.button === 0) {
+        dragState = { type: "left", startX: e.clientX, startY: e.clientY, startYaw: cameraYaw, startPitch: cameraPitch };
+      } else if (e.button === 2) {
+        dragState = { type: "right", startX: e.clientX, startY: e.clientY, startFocus: { x: focusPoint.x, y: focusPoint.y, z: focusPoint.z } };
+      }
+    });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    window.addEventListener("mousemove", function (e) {
+      if (!dragState) return;
+      if (dragState.type === "left") {
+        const dx = (e.clientX - dragState.startX) * 0.01;
+        const dy = (e.clientY - dragState.startY) * 0.01;
+        cameraYaw = dragState.startYaw + dx;
+        cameraPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, dragState.startPitch + dy));
+        updateCameraPosition();
+      } else {
+        const dx = (e.clientX - dragState.startX) * 0.15;
+        const dy = (e.clientY - dragState.startY) * 0.15;
+        const sin = Math.sin(cameraYaw);
+        const cos = Math.cos(cameraYaw);
+        focusPoint.x = dragState.startFocus.x - dx * cos - dy * sin;
+        focusPoint.z = dragState.startFocus.z + dx * sin - dy * cos;
+        focusPoint.y = dragState.startFocus.y + (dragState.startY - e.clientY) * 0.15;
+        updateCameraPosition();
+      }
+    });
+    window.addEventListener("mouseup", function () { dragState = null; });
 
-    function startPan(clientX, clientY) {
-      panState = {
-        startScrollLeft: wrap.scrollLeft,
-        startScrollTop: wrap.scrollTop,
-        startX: clientX,
-        startY: clientY,
-      };
-      document.body.style.cursor = "grabbing";
-      document.body.style.userSelect = "none";
-    }
-
-    /* Pan only on mouse click+drag; touch does not pan (user can scroll the page). */
-    wrap.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return;
-      if (e.target.closest(".location-box")) return;
+    canvas.addEventListener("wheel", function (e) {
       e.preventDefault();
-      e.stopPropagation();
-      startPan(e.clientX, e.clientY);
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    }, true);
-
-    wrap.addEventListener("dragstart", (e) => {
-      if (!e.target.closest(".location-box")) e.preventDefault();
-    });
-    wrap.addEventListener("mouseover", (e) => {
-      if (panState) return;
-      if (e.target.closest(".location-box")) wrap.style.cursor = "pointer";
-      else wrap.style.cursor = "grab";
-    });
-    wrap.addEventListener("mouseout", () => {
-      if (!panState) wrap.style.cursor = "";
-    });
-
-    wrap.addEventListener("wheel", (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      const rect = wrap.getBoundingClientRect();
-      const canvas = document.getElementById("grid-canvas");
-      const vx = e.clientX - rect.left;
-      const vy = e.clientY - rect.top;
-      const scaleOld = zoomPercent / 100;
-      const oldSw = Math.round(contentWidth * scaleOld);
-      const oldSh = Math.round(contentHeight * scaleOld);
-      const canvasW = canvas ? canvas.offsetWidth : wrap.scrollWidth;
-      const canvasH = canvas ? canvas.offsetHeight : wrap.scrollHeight;
-      const wrapperLeftOld = canvasW / 2 - oldSw / 2;
-      const wrapperTopOld = canvasH / 2 - oldSh / 2;
-      const cx = (wrap.scrollLeft + vx - wrapperLeftOld) / scaleOld;
-      const cy = (wrap.scrollTop + vy - wrapperTopOld) / scaleOld;
-      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      setZoomPercent(zoomPercent + delta);
-      const scaleNew = zoomPercent / 100;
-      const newSw = Math.round(contentWidth * scaleNew);
-      const newSh = Math.round(contentHeight * scaleNew);
-      var canvasW2 = canvas ? canvas.offsetWidth : wrap.scrollWidth;
-      var canvasH2 = canvas ? canvas.offsetHeight : wrap.scrollHeight;
-      var wrapperLeftNew = canvasW2 / 2 - newSw / 2;
-      var wrapperTopNew = canvasH2 / 2 - newSh / 2;
-      var newScrollLeft = wrapperLeftNew + cx * scaleNew - vx;
-      var newScrollTop = wrapperTopNew + cy * scaleNew - vy;
-      wrap.scrollLeft = Math.max(0, Math.min(wrap.scrollWidth - wrap.clientWidth, newScrollLeft));
-      wrap.scrollTop = Math.max(0, Math.min(wrap.scrollHeight - wrap.clientHeight, newScrollTop));
+      const delta = e.deltaY > 0 ? 8 : -8;
+      cameraDistance = Math.max(CAMERA_DIST_MIN, Math.min(CAMERA_DIST_MAX, cameraDistance + delta));
+      updateCameraPosition();
     }, { passive: false });
 
-    wrap.addEventListener("dblclick", (e) => {
-      const box = e.target.closest(".location-box");
-      if (box && box.dataset.nodeId) {
-        openModal(box.dataset.nodeId);
-        return;
+    canvas.addEventListener("click", function (e) {
+      if (e.button !== 0 || dragState) return;
+      if (skipNextClick) { skipNextClick = false; return; }
+      if (typeof THREE === "undefined" || !camera3D || !scene3D) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2(x, y);
+      raycaster.setFromCamera(mouse, camera3D);
+      const allPickable = locationMeshes.map(function (o) { return o.mesh; }).concat(labelMeshes);
+      const hits = raycaster.intersectObjects(allPickable);
+      if (hits.length > 0 && hits[0].object.userData && hits[0].object.userData.nodeId) {
+        openModal(hits[0].object.userData.nodeId);
       }
-      const { gx, gy } = eventToSlot(wrap, e.clientX, e.clientY);
-      const nodeId = "room_" + gx + "_" + gy;
-      const body = {
-        node_id: nodeId,
-        node_type: "location",
-        name: "New Room",
-        base_description: "",
-        adjectives: "[]",
-        location_id: null,
-        is_active: 1,
-        meta: null,
-        grid_x: gx,
-        grid_y: gy,
-        exits: "[]",
-      };
-      fetch(apiUrl("/api/world-graph"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-        .then((r) => {
-          if (r.status === 409) {
-            return fetch(apiUrl("/api/world-graph"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ...body,
-                node_id: "room_" + gx + "_" + gy + "_" + Date.now(),
-              }),
-            });
-          }
-          return r;
-        })
-        .then((r) => {
-          if (r.status === 401) {
-            showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
-            return;
-          }
-          if (!r.ok) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
-          return r.json();
-        })
-        .then(() => fetchGraph())
-        .catch((err) => alert("Add room failed: " + (err.message || err)));
     });
+
   }
+
+
+  function render() {
+    if (typeof THREE === "undefined") return;
+    if (!scene3D) initScene3D();
+    if (scene3D) {
+      buildScene3D();
+      if (!animationId) animate();
+    }
+  }
+
 
   function closeModal() {
     document.getElementById("modal").classList.add("hidden");
@@ -638,7 +582,7 @@
 
   // --- Panel switching ---
   const SUBTITLES = {
-    "panel-world-graph": "Rooms are arranged by connections (exits). Double-click empty space to add a room; drag empty space to pan; click a room to edit.",
+    "panel-world-graph": "3D world: left-drag orbit, right-drag pan, wheel zoom. Click location to edit; use Add location to create (add exits to place it).",
     "panel-history": "History ledger entries. Edit, add, or delete (with confirmation).",
     "panel-vocabulary": "Vocabulary terms. Edit, add, or delete (with confirmation).",
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",
@@ -666,49 +610,49 @@
     });
   }
 
-  setupPanAndDrag();
-
   (function setupZoomControls() {
     const zoomOut = document.getElementById("zoom-out");
     const zoomIn = document.getElementById("zoom-in");
     const zoomInput = document.getElementById("zoom-percent");
-    if (zoomOut) zoomOut.addEventListener("click", () => setZoomPercent(zoomPercent - ZOOM_STEP));
-    if (zoomIn) zoomIn.addEventListener("click", () => setZoomPercent(zoomPercent + ZOOM_STEP));
+    function updateZoomUI() {
+      if (zoomInput) zoomInput.value = Math.round(cameraDistance);
+    }
+    if (zoomOut) zoomOut.addEventListener("click", function () {
+      cameraDistance = Math.max(CAMERA_DIST_MIN, cameraDistance - 15);
+      updateCameraPosition();
+      updateZoomUI();
+    });
+    if (zoomIn) zoomIn.addEventListener("click", function () {
+      cameraDistance = Math.min(CAMERA_DIST_MAX, cameraDistance + 15);
+      updateCameraPosition();
+      updateZoomUI();
+    });
     if (zoomInput) {
-      zoomInput.addEventListener("change", () => setZoomPercent(zoomInput.value));
-      zoomInput.addEventListener("blur", () => { zoomInput.value = zoomPercent; });
+      zoomInput.addEventListener("change", function () {
+        const v = parseFloat(zoomInput.value);
+        if (!isNaN(v)) {
+          cameraDistance = Math.max(CAMERA_DIST_MIN, Math.min(CAMERA_DIST_MAX, v));
+          updateCameraPosition();
+          updateZoomUI();
+        }
+      });
+      zoomInput.addEventListener("blur", updateZoomUI);
     }
     window.addEventListener("resize", function () {
       if (!document.getElementById("panel-world-graph").classList.contains("active")) return;
-      refWrapW = 0;
-      refWrapH = 0;
-      lastApplyZoomPercent = 0;
-      applyZoom();
+      if (renderer3D && camera3D && canvas3D) {
+        var wrap = document.getElementById("grid-wrap");
+        if (wrap) {
+          camera3D.aspect = wrap.clientWidth / wrap.clientHeight;
+          camera3D.updateProjectionMatrix();
+          renderer3D.setSize(wrap.clientWidth, wrap.clientHeight);
+        }
+      }
     });
-    var wrapEl = document.getElementById("grid-wrap");
-    var panelEl = document.getElementById("panel-world-graph");
-    if (typeof ResizeObserver !== "undefined") {
-      var resizeScheduled = false;
-      var onResize = function () {
-        if (!panelEl || !panelEl.classList.contains("active")) return;
-        if (Date.now() - lastApplyZoomTime < applyZoomThrottleMs) return;
-        if (resizeScheduled) return;
-        resizeScheduled = true;
-        requestAnimationFrame(function () {
-          resizeScheduled = false;
-          applyZoom();
-        });
-      };
-      if (wrapEl) {
-        var roWrap = new ResizeObserver(onResize);
-        roWrap.observe(wrapEl);
-      }
-      if (panelEl) {
-        var roPanel = new ResizeObserver(onResize);
-        roPanel.observe(panelEl);
-      }
-    }
   })();
+
+  var addLocationBtn = document.getElementById("world-graph-add-location");
+  if (addLocationBtn) addLocationBtn.addEventListener("click", openNodeModalNew);
 
   (function () {
     const checkbox = document.getElementById("show-locations");
@@ -962,11 +906,14 @@
     document.getElementById("edit-meta").value = "";
     document.getElementById("edit-grid_x").value = "";
     document.getElementById("edit-grid_y").value = "";
+    document.getElementById("edit-grid_z").value = "";
     document.getElementById("edit-exits").value = "[]";
+    document.getElementById("edit-node_type").value = "location";
     document.getElementById("exits-section").classList.remove("hidden");
     renderExitsList([], null);
-    document.getElementById("modal-title").textContent = "New node";
+    document.getElementById("modal-title").textContent = "New location";
     document.getElementById("modal-delete").style.display = "none";
+    document.getElementById("modal-move-player-wrap").classList.add("hidden");
     document.getElementById("modal").classList.remove("hidden");
     document.getElementById("modal-backdrop").classList.remove("hidden");
   }
@@ -1001,6 +948,7 @@
     document.getElementById("edit-meta").value = node.meta ?? "";
     document.getElementById("edit-grid_x").value = node.grid_x ?? "";
     document.getElementById("edit-grid_y").value = node.grid_y ?? "";
+    document.getElementById("edit-grid_z").value = node.grid_z ?? "";
     if (node.node_type === "location") {
       document.getElementById("exits-section").classList.remove("hidden");
       renderExitsList(node.exits, node.node_id);
@@ -1010,6 +958,11 @@
     }
     document.getElementById("modal-title").textContent = "Edit: " + (node.name || node.node_id);
     document.getElementById("modal-delete").style.display = "";
+    if (node.node_type === "location") {
+      document.getElementById("modal-move-player-wrap").classList.remove("hidden");
+    } else {
+      document.getElementById("modal-move-player-wrap").classList.add("hidden");
+    }
     document.getElementById("modal").classList.remove("hidden");
     document.getElementById("modal-backdrop").classList.remove("hidden");
   }
@@ -1017,13 +970,55 @@
   document.getElementById("edit-node_type").addEventListener("change", function () {
     const isLocation = this.value === "location";
     const section = document.getElementById("exits-section");
+    const moveWrap = document.getElementById("modal-move-player-wrap");
     if (isLocation) {
       section.classList.remove("hidden");
       renderExitsList([], document.getElementById("edit-node_id").value || null);
+      if (document.getElementById("edit-node_id").value) moveWrap.classList.remove("hidden");
     } else {
       section.classList.add("hidden");
       document.getElementById("edit-exits").value = "[]";
+      moveWrap.classList.add("hidden");
     }
+  });
+
+  document.getElementById("modal-move-player").addEventListener("click", function () {
+    const locationId = document.getElementById("edit-node_id").value;
+    if (!locationId) return;
+    if (!confirm("Move the player to this location?")) return;
+    const player = allNodes.find(function (n) { return n.node_id === "player"; });
+    if (!player) return;
+    const payload = {
+      node_type: "player",
+      name: player.name || "Player",
+      base_description: player.base_description || "",
+      adjectives: typeof player.adjectives === "string" ? player.adjectives : JSON.stringify(player.adjectives || []),
+      location_id: locationId,
+      is_active: player.is_active != null ? player.is_active : 1,
+      meta: player.meta != null ? player.meta : null,
+      exits: "[]",
+      grid_x: null,
+      grid_y: null,
+      grid_z: null,
+    };
+    fetch(apiUrl("/api/world-graph/player"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) {
+        if (r.status === 401) {
+          showApiMessage("Invalid or incorrect API key. Use ?api=YOUR_KEY in the URL.");
+          return;
+        }
+        if (!r.ok) return r.json().then(function (j) { return Promise.reject(new Error(j.error || r.statusText)); });
+        return r.json();
+      })
+      .then(function () {
+        fetchGraph();
+        if (document.getElementById("panel-nodes").classList.contains("active")) renderNodes();
+      })
+      .catch(function (err) { alert("Move player failed: " + (err.message || err)); });
   });
 
   document.getElementById("exits-add").addEventListener("click", function () {
@@ -1051,13 +1046,19 @@
       grid_x: (function () {
         const v = document.getElementById("edit-grid_x").value;
         if (v === "") return null;
-        const n = parseInt(v, 10);
+        const n = parseFloat(v);
         return isNaN(n) ? null : n;
       })(),
       grid_y: (function () {
         const v = document.getElementById("edit-grid_y").value;
         if (v === "") return null;
-        const n = parseInt(v, 10);
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      })(),
+      grid_z: (function () {
+        const v = document.getElementById("edit-grid_z").value;
+        if (v === "") return null;
+        const n = parseFloat(v);
         return isNaN(n) ? null : n;
       })(),
       exits: exitsJson,
