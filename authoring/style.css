@@ -221,12 +221,8 @@ body {
   display: flex;
 }
 
-/* Canvas: min 100% so it fills wrap (grid fills view); zoom wrapper centered inside; when content larger, JS sets pixel size */
+/* Canvas: fills wrap (JS sets absolute inset 0 when content fits) or has pixel size when content larger; zoom wrapper centered inside */
 .grid-canvas {
-  min-width: 100%;
-  min-height: 100%;
-  margin: auto;
-  flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;

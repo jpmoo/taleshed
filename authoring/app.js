@@ -349,10 +349,18 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
-      if (wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH)) {
+      var contentLarger = wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH);
+      if (contentLarger) {
+        canvas.style.position = "relative";
+        canvas.style.top = canvas.style.left = canvas.style.right = canvas.style.bottom = "";
         canvas.style.width = sw + "px";
         canvas.style.height = sh + "px";
       } else {
+        canvas.style.position = "absolute";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.right = "0";
+        canvas.style.bottom = "0";
         canvas.style.width = "";
         canvas.style.height = "";
       }
