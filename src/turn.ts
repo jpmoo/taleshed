@@ -311,7 +311,9 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   const locAdjectives = safeParseAdjectives(location.adjectives);
   const darkActive = locAdjectives.some((a) => a.toLowerCase() === "dark");
   const cameFromId = getPlayerCameFromLocationId(db);
+  let darkActiveAndNotNegated = false;
   if (darkActive && !isDarkNegated(inventory, inLocation)) {
+    darkActiveAndNotNegated = true;
     entities = [];
     if (cameFromId != null) {
       const entranceOnly = locationExits.filter((e) => e.target === cameFromId);
@@ -324,6 +326,7 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   debugLog("scene entities", `location: ${location.node_id} | entity node_ids: ${entities.map((e) => e.node_id).join(", ")}`);
 
   return {
+    darkActive: darkActiveAndNotNegated,
     location: toSceneEntity(
       location,
       getRecentHistoryForNode(db, location.node_id, 3).map((h) => sanitizeProseForPrompt(h.prose_impact)).filter(Boolean)

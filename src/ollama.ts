@@ -54,6 +54,8 @@ export interface SceneContext {
   inventoryNodeIds: string[];
   vocabulary: VocabularyItem[];
   locationExits: LocationExit[];
+  /** When true, location is dark with no light; prompt must show only darkness and the entrance exit (if any). */
+  darkActive?: boolean;
 }
 
 /** Destination scene when the player command is movement: location + entities + exits at the target. Used so narrative can describe arrival. */
@@ -140,9 +142,12 @@ When assigning adjectives to nodes, use existing vocabulary terms where possible
 function buildSectionC(ctx: SceneContext): string {
   const loc = ctx.location;
   const adj = Array.isArray(loc.adjectives) ? loc.adjectives : [];
+  const locationDescription = ctx.darkActive
+    ? "Impenetrable darkness. You can see nothing."
+    : loc.base_description;
   let out = `CURRENT SCENE:
 Location: ${loc.node_id} — ${loc.name}
-Description: ${loc.base_description}
+Description: ${locationDescription}
 Location adjectives: ${JSON.stringify(adj)}
 
 ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). These are the only people and objects the player can take, use, talk to, or otherwise affect this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present. (The player may still interact with scenery—atmospheric detail—for narrative-only actions like sitting or leaning, with no world-state impact.) Your narrative_prose MUST mention each of these: the location and every entity below. Every NPC in this list must be named and described in your narrative—do not skip or omit any character. Where an entity line shows "contains: X", follow the CONTAINMENT RULE after this list—state what is inside; never describe that container as empty. For each object, mention the object itself (e.g. "the torch") so the player can take or use it. If an object is listed here (e.g. torch_01), the room HAS that object: never say it is absent or missing.
