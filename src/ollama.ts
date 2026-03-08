@@ -248,8 +248,12 @@ function buildSectionE(
     destinationScene != null
       ? `\n${buildSectionDestination(destinationScene)}\n`
       : "";
+  const isOfferOrQuestion = /^\s*(offer to|may i\b|shall i\b|would you like me to|want me to|can i get you|I could\b|I can get you\b|how about i\b)/i.test(playerCommand.trim());
+  const offerBlock = isOfferOrQuestion
+    ? `\n*** OFFER/QUESTION DETECTED: The player ONLY offered or asked—they did NOT give a command to do it. You must NOT perform the action (do not light, open, unlock, give, or change any object/location state). Do NOT set adjectives_new to "lit", "open", or any state change for any node. Narrate ONLY the offer and the NPC's or world's response (e.g. Ciaran says he would welcome light, or nods). The torch does NOT get lit; no object or location changes state this turn. ***\n\n`
+    : "";
   return `PLAYER ACTION: ${playerCommand}
-START/BEGIN: If the player said "start" or "begin", only describe the scene. Do NOT set new_location_id for any object. No state changes.
+${offerBlock}START/BEGIN: If the player said "start" or "begin", only describe the scene. Do NOT set new_location_id for any object. No state changes.
 ${containmentLine}TAKE: Set new_location_id to "player" in the **taken object's** entry only (e.g. torch_01), not in the player's entry. Without new_location_id on the taken object, the object will not move to the player. Omit new_location_id for that object if it stays in place (e.g. lighting it in its bracket).
 Reminder: Literal actions only; offers/questions do not perform the action; objects do not change state on their own or when taken.
 ${exitLine}${destinationLine}

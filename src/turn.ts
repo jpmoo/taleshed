@@ -32,6 +32,11 @@ import {
   type VocabularyItem,
 } from "./ollama.js";
 
+/** True if the player only offered or asked (did not give a command to perform the action). */
+function isOfferOrQuestion(playerCommand: string): boolean {
+  return /^\s*(offer to|may i\b|shall i\b|would you like me to|want me to|can i get you|I could\b|I can get you\b|how about i\b)/i.test(playerCommand.trim());
+}
+
 const OLLAMA_UNREACHABLE_PROSE =
   "The world pauses, as if holding its breath. (Engine: Ollama unreachable. Please check the local model service.)";
 
@@ -345,6 +350,14 @@ export async function takeTurn(
       };
     }
     impactByNode.set(nodeId, entry);
+  }
+
+  /* When the player only offered or asked, do not apply state changes or moves—even if the model disobeyed. */
+  if (isOfferOrQuestion(playerCommand)) {
+    for (const [, entry] of impactByNode) {
+      entry.adjectives_new = [...entry.adjectives_old];
+      entry.new_location_id = undefined;
+    }
   }
 
   const vocabulary = getFullVocabulary(db);
