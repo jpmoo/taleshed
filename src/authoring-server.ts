@@ -7,6 +7,7 @@
  */
 
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import express, { Request, Response, NextFunction } from "express";
 import { initDatabase, getDbPath } from "./db/schema.js";
@@ -27,7 +28,14 @@ const PORT = Number(process.env["TALESHED_WEB_PORT"] ?? String(mcpPort + 1));
 const HOST = process.env["TALESHED_WEB_IP"] ?? "0.0.0.0";
 
 const dbPath = getDbPath();
-const db = initDatabase(dbPath);
+let db = initDatabase(dbPath);
+
+const BACKUP_DIR = path.join(PROJECT_ROOT, "backup");
+function ensureBackupDir(): void {
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  } catch (_) {}
+}
 
 const DIRECTIONS = [
   "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
@@ -474,6 +482,86 @@ app.delete("/api/vocabulary/:adjective", (req: Request, res: Response) => {
     }
     res.status(204).end();
   } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// Backup: copy current DB into backup/ with timestamp name
+app.post("/api/backup", (_req: Request, res: Response) => {
+  try {
+    ensureBackupDir();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 23);
+    const name = `${timestamp}-taleshed.db`;
+    const dest = path.join(BACKUP_DIR, name);
+    fs.copyFileSync(dbPath, dest);
+    res.status(201).json({ name, path: dest });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// List backups (files in backup/ matching *-taleshed.db)
+app.get("/api/backup", (_req: Request, res: Response) => {
+  try {
+    ensureBackupDir();
+    const names = fs.readdirSync(BACKUP_DIR)
+      .filter((f) => f.endsWith("-taleshed.db"))
+      .sort()
+      .reverse();
+    const list = names.map((name) => {
+      const full = path.join(BACKUP_DIR, name);
+      const stat = fs.statSync(full);
+      return { name, size: stat.size, mtime: stat.mtime.toISOString() };
+    });
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// Delete one backup by filename (basename only; no path traversal)
+app.delete("/api/backup/:filename", (req: Request, res: Response) => {
+  const raw = decodeURIComponent(req.params.filename);
+  const basename = path.basename(raw);
+  if (basename !== raw || !basename.endsWith("-taleshed.db")) {
+    res.status(400).json({ error: "Invalid backup filename" });
+    return;
+  }
+  try {
+    const full = path.join(BACKUP_DIR, basename);
+    if (!fs.existsSync(full)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    fs.unlinkSync(full);
+    res.status(204).end();
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// Restore: replace current database with the selected backup
+app.post("/api/backup/:filename/restore", (req: Request, res: Response) => {
+  const raw = decodeURIComponent(req.params.filename);
+  const basename = path.basename(raw);
+  if (basename !== raw || !basename.endsWith("-taleshed.db")) {
+    res.status(400).json({ error: "Invalid backup filename" });
+    return;
+  }
+  try {
+    const backupPath = path.join(BACKUP_DIR, basename);
+    if (!fs.existsSync(backupPath)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    db.close();
+    fs.copyFileSync(backupPath, dbPath);
+    db = initDatabase(dbPath);
+    res.json({ ok: true, message: "Database restored from " + basename });
+  } catch (e) {
+    try {
+      db = initDatabase(dbPath);
+    } catch (_) {}
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
 });

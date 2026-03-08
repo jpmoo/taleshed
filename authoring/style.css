@@ -431,3 +431,42 @@ body {
 }
 .btn-add-adjective:hover { filter: brightness(1.08); }
 .modal-move-player-wrap.hidden { display: none; }
+
+.backup-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.backup-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--grid);
+}
+.backup-item:last-child { border-bottom: none; }
+.backup-name { font-weight: 500; }
+.backup-meta { font-size: 0.85rem; color: #666; }
+.backup-empty, .backup-error { padding: 0.75rem 0; color: #666; }
+.backup-error { color: var(--danger); }
+.btn-restore-backup {
+  margin-left: auto;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--accent);
+  color: var(--white);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-restore-backup:hover { filter: brightness(1.08); }
+.btn-delete-backup {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--danger);
+  color: var(--white);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-delete-backup:hover { filter: brightness(1.08); }

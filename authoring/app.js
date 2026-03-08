@@ -908,6 +908,7 @@
     "panel-history": "History ledger entries. Edit, add, or delete (with confirmation).",
     "panel-vocabulary": "Vocabulary terms. Edit, add, or delete (with confirmation).",
     "panel-nodes": "All world_graph nodes. Edit, add, or delete (with confirmation).",
+    "panel-backup": "Create a timestamped backup of the database; list and delete backups.",
   };
   function switchPanel(panelId) {
     if (!panelId) return;
@@ -923,6 +924,7 @@
     if (panelId === "panel-history") fetchHistory();
     if (panelId === "panel-vocabulary") fetchVocabulary();
     if (panelId === "panel-nodes") fetchGraph(); /* renderNodes() called from fetchGraph when data loads if this panel is active */
+    if (panelId === "panel-backup") fetchBackups();
   }
   var nav = document.querySelector(".bottom-nav");
   if (nav) {
@@ -1187,6 +1189,86 @@
   document.getElementById("modal-vocab-backdrop").addEventListener("click", () => {
     document.getElementById("modal-vocab").classList.add("hidden");
     document.getElementById("modal-vocab-backdrop").classList.add("hidden");
+  });
+
+  // --- Backup ---
+  function fetchBackups() {
+    fetch(apiUrl("/api/backup"))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))))
+      .then((list) => {
+        const el = document.getElementById("backup-list");
+        el.innerHTML = "";
+        if (!list || list.length === 0) {
+          el.innerHTML = "<li class=\"backup-empty\">No backups yet. Click Create backup to save the current database.</li>";
+          return;
+        }
+        list.forEach((item) => {
+          const li = document.createElement("li");
+          li.className = "backup-item";
+          const sizeK = (item.size / 1024).toFixed(1);
+          const mtime = item.mtime ? new Date(item.mtime).toLocaleString() : "";
+          li.innerHTML =
+            "<span class=\"backup-name\">" +
+            escapeHtml(item.name) +
+            "</span> <span class=\"backup-meta\">" +
+            sizeK +
+            " KB · " +
+            escapeHtml(mtime) +
+            "</span> ";
+          const restoreBtn = document.createElement("button");
+          restoreBtn.type = "button";
+          restoreBtn.className = "btn btn-sm btn-restore-backup";
+          restoreBtn.textContent = "Restore";
+          restoreBtn.setAttribute("aria-label", "Restore from " + item.name);
+          restoreBtn.addEventListener("click", function () {
+            if (!confirm('Restore database from "' + item.name + '"? The current database will be replaced. This cannot be undone.')) return;
+            fetch(apiUrl("/api/backup/" + encodeURIComponent(item.name) + "/restore"), { method: "POST" })
+              .then((r) => (r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)))))
+              .then(() => {
+                fetchBackups();
+                fetchGraph();
+                if (document.getElementById("panel-nodes").classList.contains("active")) renderNodes();
+                if (document.getElementById("panel-history").classList.contains("active")) fetchHistory();
+                if (document.getElementById("panel-vocabulary").classList.contains("active")) fetchVocabulary();
+                alert("Database restored. Reload the page or switch tabs to see the restored data.");
+              })
+              .catch((err) => alert("Restore failed: " + (err.message || err)));
+          });
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "btn btn-sm btn-delete-backup";
+          delBtn.textContent = "Delete";
+          delBtn.setAttribute("aria-label", "Delete backup " + item.name);
+          delBtn.addEventListener("click", function () {
+            if (!confirm('Delete backup "' + item.name + '"? This cannot be undone.')) return;
+            fetch(apiUrl("/api/backup/" + encodeURIComponent(item.name)), { method: "DELETE" })
+              .then((r) => {
+                if (r.status !== 204 && r.status !== 200) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
+                fetchBackups();
+              })
+              .catch((err) => alert("Delete failed: " + (err.message || err)));
+          });
+          li.appendChild(restoreBtn);
+          li.appendChild(delBtn);
+          el.appendChild(li);
+        });
+      })
+      .catch((err) => {
+        const el = document.getElementById("backup-list");
+        el.innerHTML = "<li class=\"backup-error\">Failed to load backups: " + escapeHtml(err.message || String(err)) + "</li>";
+      });
+  }
+  document.getElementById("backup-create").addEventListener("click", function () {
+    fetch(apiUrl("/api/backup"), { method: "POST" })
+      .then((r) => {
+        if (!r.ok) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
+        return r.json();
+      })
+      .then((data) => {
+        fetchBackups();
+        alert("Backup created: " + (data.name || "saved"));
+      })
+      .catch((err) => alert("Backup failed: " + (err.message || err)));
   });
 
   // --- Nodes list ---

@@ -66,12 +66,22 @@
         </table>
       </div>
     </div>
+    <div id="panel-backup" class="panel">
+      <div class="list-toolbar">
+        <button type="button" class="btn btn-add" id="backup-create">Create backup</button>
+      </div>
+      <p class="field-hint" style="margin: 0.5rem 0;">Backups are saved in the <code>backup/</code> folder as <code>[timestamp]-taleshed.db</code>.</p>
+      <div class="list-wrap">
+        <ul id="backup-list" class="backup-list" aria-label="Backup files"></ul>
+      </div>
+    </div>
   </main>
   <nav class="bottom-nav" aria-label="Authoring sections">
     <button type="button" class="nav-btn active" data-panel="panel-world-graph">World Graph</button>
     <button type="button" class="nav-btn" data-panel="panel-history">History Ledger</button>
     <button type="button" class="nav-btn" data-panel="panel-vocabulary">Vocabulary</button>
     <button type="button" class="nav-btn" data-panel="panel-nodes">Nodes</button>
+    <button type="button" class="nav-btn" data-panel="panel-backup">Backup</button>
   </nav>
   <div id="modal-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
   <div id="modal" class="modal hidden" role="dialog" aria-labelledby="modal-title" aria-modal="true">
