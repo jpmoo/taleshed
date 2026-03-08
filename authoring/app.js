@@ -72,7 +72,7 @@
         setTimeout(function () {
           applyZoom();
           centerMapScrollAfterLayout();
-        }, 200);
+        }, 400);
         var nodesPanel = document.getElementById("panel-nodes");
         if (nodesPanel && nodesPanel.classList.contains("active")) renderNodes();
       })
@@ -317,6 +317,7 @@
 
   function centerMapScrollAfterLayout() {
     var run = function () {
+      applyZoom();
       centerMapScroll();
     };
     requestAnimationFrame(function () {
@@ -324,6 +325,8 @@
       requestAnimationFrame(run);
       setTimeout(run, 50);
       setTimeout(run, 150);
+      setTimeout(run, 300);
+      setTimeout(run, 450);
     });
   }
 
@@ -346,19 +349,12 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
-      if (wrapW <= 0 || wrapH <= 0) {
-        var panel = document.getElementById("panel-world-graph");
-        if (panel) {
-          wrapW = panel.clientWidth || 0;
-          wrapH = panel.clientHeight || 0;
-        }
-        if (wrapW <= 0 || wrapH <= 0) {
-          wrapW = document.documentElement.clientWidth || window.innerWidth || 800;
-          wrapH = document.documentElement.clientHeight || window.innerHeight || 600;
-        }
+      var cw = sw;
+      var ch = sh;
+      if (wrapW > 0 && wrapH > 0) {
+        cw = Math.max(wrapW, sw);
+        ch = Math.max(wrapH, sh);
       }
-      var cw = Math.max(wrapW, sw);
-      var ch = Math.max(wrapH, sh);
       canvas.style.width = Math.max(1, cw) + "px";
       canvas.style.height = Math.max(1, ch) + "px";
     }
@@ -662,14 +658,22 @@
       }
     });
     var wrapEl = document.getElementById("grid-wrap");
-    if (wrapEl && typeof ResizeObserver !== "undefined") {
-      var ro = new ResizeObserver(function () {
-        if (document.getElementById("panel-world-graph").classList.contains("active")) {
+    var panelEl = document.getElementById("panel-world-graph");
+    if (typeof ResizeObserver !== "undefined") {
+      var onResize = function () {
+        if (panelEl && panelEl.classList.contains("active")) {
           applyZoom();
           centerMapScrollAfterLayout();
         }
-      });
-      ro.observe(wrapEl);
+      };
+      if (wrapEl) {
+        var roWrap = new ResizeObserver(onResize);
+        roWrap.observe(wrapEl);
+      }
+      if (panelEl) {
+        var roPanel = new ResizeObserver(onResize);
+        roPanel.observe(panelEl);
+      }
     }
   })();
 
