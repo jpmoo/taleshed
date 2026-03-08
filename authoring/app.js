@@ -42,6 +42,7 @@
   const CAMERA_DIST_MIN = 20;
   const CAMERA_DIST_MAX = 400;
   let compassRose = null; /* 3D compass group; position updated each frame */
+  var compassLowerLeftNDC = new THREE.Vector3(-0.82, -0.82, 0.22); /* lower-left corner, reused for unproject */
   let sceneDirectionalLight = null; /* light position follows player location */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
   const keysPressed = Object.create(null);
@@ -365,6 +366,7 @@
   function createCompassRose() {
     if (typeof THREE === "undefined") return null;
     var group = new THREE.Group();
+    group.scale.setScalar(0.35); /* small in corner */
     var ringRadius = 12;
     var ringTube = 0.2;
     var ringGeo = new THREE.TorusGeometry(ringRadius, ringTube, 8, 32);
@@ -609,8 +611,10 @@
   function animate() {
     if (!renderer3D || !scene3D || !camera3D) return;
     applyWasdPan();
-    if (compassRose) {
-      compassRose.position.set(focusPoint.x, focusPoint.y, focusPoint.z);
+    if (compassRose && camera3D) {
+      compassLowerLeftNDC.set(-0.82, -0.82, 0.22);
+      compassLowerLeftNDC.unproject(camera3D);
+      compassRose.position.copy(compassLowerLeftNDC);
     }
     if (sceneDirectionalLight && locations && locations.length > 0) {
       var playerNode = allNodes.find(function (n) { return n.node_id === "player"; });
