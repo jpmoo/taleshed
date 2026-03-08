@@ -344,6 +344,7 @@
     const content = document.getElementById("grid-content");
     const input = document.getElementById("zoom-percent");
     if (!wrapper || !content) return;
+    if (!contentWidth || !contentHeight) return;
     const scale = zoomPercent / 100;
     const sw = Math.round(contentWidth * scale);
     const sh = Math.round(contentHeight * scale);
