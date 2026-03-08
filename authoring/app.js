@@ -358,9 +358,10 @@
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
       if (w <= 0 || h <= 0) return;
-      var panMargin = 200;
-      canvas.style.width = (Math.max(w, sw) + panMargin) + "px";
-      canvas.style.height = (Math.max(h, sh) + panMargin) + "px";
+      canvas.style.width = Math.max(w, sw) + "px";
+      canvas.style.height = Math.max(h, sh) + "px";
+      wrap.offsetHeight;
+      centerMapScroll();
     }
   }
 
