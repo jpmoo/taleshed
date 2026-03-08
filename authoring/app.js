@@ -697,11 +697,16 @@
     var wrapEl = document.getElementById("grid-wrap");
     var panelEl = document.getElementById("panel-world-graph");
     if (typeof ResizeObserver !== "undefined") {
+      var resizeScheduled = false;
       var onResize = function () {
-        if (panelEl && panelEl.classList.contains("active")) {
+        if (!panelEl || !panelEl.classList.contains("active")) return;
+        if (resizeScheduled) return;
+        resizeScheduled = true;
+        requestAnimationFrame(function () {
+          resizeScheduled = false;
           applyZoom();
           centerMapScrollAfterLayout();
-        }
+        });
       };
       if (wrapEl) {
         var roWrap = new ResizeObserver(onResize);
