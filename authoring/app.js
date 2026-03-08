@@ -365,7 +365,7 @@
   function createCompassRose() {
     if (typeof THREE === "undefined") return null;
     var group = new THREE.Group();
-    group.scale.setScalar(0.055); /* much smaller, lower-left corner */
+    group.scale.setScalar(0.0275); /* 50% of previous; lower-left corner */
     var ringRadius = 12;
     var ringTube = 0.2;
     var ringGeo = new THREE.TorusGeometry(ringRadius, ringTube, 8, 32);
