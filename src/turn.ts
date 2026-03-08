@@ -252,6 +252,8 @@ export interface TakeTurnResult {
   result: "success" | "failure" | "partial" | "error";
   prose: string;
   error?: string;
+  /** If the model reported inconsistencies (e.g. narrative described a state change not reflected in adjectives_new). */
+  reconciliation_notes?: string | null;
 }
 
 export async function takeTurn(
@@ -495,6 +497,7 @@ export async function takeTurn(
   return {
     result: mistralResponse.action_result,
     prose: mistralResponse.narrative_prose ?? "",
+    reconciliation_notes: mistralResponse.reconciliation_notes ?? null,
   };
 }
 

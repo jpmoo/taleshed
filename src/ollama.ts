@@ -99,7 +99,8 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - There are exactly as many doors or passages as in EXITS FROM THIS LOCATION. One listed exit = one door. Do not add a "second door", "curtained door", "far wall door", "doorway north", or antechamber. Do not describe or mention any door or direction not in EXITS—e.g. if EXITS list only "west -> scriptorium", there is no north door; say only what exists. If the player goes through the door, they go to the destination in the EXITS list. Do not invent new locations (antechamber, corridor, passage) — only locations in the world exist.
 - When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), goes back, returns, or goes to a named place (e.g. "go back to scriptorium", "go west"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to the destination's node_id (from EXITS: e.g. kitchen, scriptorium). Use the exact target node_id from EXITS (e.g. kitchen), not a phrase like "the kitchen" or "The Kitchen"—the engine only accepts node_ids that exist. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Compound commands (e.g. "take torch and go through door") require every part to be applied: do the take AND set the player's new_location_id to the exit target so the engine actually moves them. Otherwise the engine will not move the player.
 - In narrative_prose, you MUST also describe the exits. For each exit in EXITS FROM THIS LOCATION, tell the player the direction and where it goes (e.g. "To the east, a battered door leads to the kitchen") so they can say "go east" or "east" to move. Do not omit exits. Mention only the exits listed—no extra doors or directions.
-- You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn. Do not change adjectives unless the player's action involved that node and the narrative describes the change (e.g. player talked to Ciaran and he became less guarded); for entering, looking, or movement-only commands, keep adjectives_new equal to adjectives_old for all nodes. Never omit an entry or leave adjectives blank for a node that has adjectives.
+- You MUST return node_impacts with one entry for every node in the scene (the location, each entity in ENTITIES PRESENT, and the player). Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn. Never omit an entry or leave adjectives blank for a node that has adjectives.
+- When your narrative explicitly describes a change in an NPC's disposition or attitude (e.g. they warm up, smile, become less guarded, show trust, relax), you MUST set that NPC's adjectives_new to reflect that state. If you describe them as no longer guarded, remove "guarded" from adjectives_new or add an appropriate term; if you describe them as pleased or open, add or adjust adjectives accordingly. The engine only persists what you put in adjectives_new—so if your prose says Ciaran "allows himself a faint smile" and "is genuinely pleased" but you leave adjectives_new as ["guarded"], the next turn will still show him as guarded. adjectives_new must match the state your narrative describes. For entering, looking, or movement-only commands (no interaction with an NPC or object), keep adjectives_new equal to adjectives_old for all nodes.
 - You may add atmospheric room detail (shelves, curtain, bench, etc.) as scenery for color. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Useful flame or fire (anything that can light another object or be taken/used) must never exist only in scenery or in a location's description. Candles, lanterns, braziers, etc. mentioned only in room text are never sufficient to light something or to take and use; only objects listed in ENTITIES PRESENT (e.g. a fire object in the room, a torch) can be used that way.
 
 SCENERY (atmospheric detail not in ENTITIES PRESENT):
@@ -258,7 +259,7 @@ START/BEGIN: If the player said "start" or "begin", only describe the scene. Do 
 ${containmentLine}TAKE: If the player takes an object, set new_location_id to "player" in **that object's** node_impacts entry (e.g. torch_01's entry gets new_location_id: "player"). Do NOT set the player's new_location_id to "player"—the player's new_location_id is only for movement to a location (e.g. kitchen). Without new_location_id on the taken object, the object will not move to the player. The object moves to the player; the player stays in a location. Only set new_location_id for an object when the player explicitly took it; if the narrative has the object stay in place (e.g. lighting the torch in its bracket), omit new_location_id for that object.
 Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch"; do not open a door or give an item if the player only offered or asked "shall I open it?" or "want me to give you that?"). Offers and questions do not perform the action. Never have objects change state on their own: no torch lighting by itself, no "it catches", "of its own accord", or "by the logic of this world"—only an explicit player action can change an object's state.
 ${exitLine}${destinationLine}
-CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player — and NO OTHER node_ids. If the player tried to interact with someone or something not in ENTITIES PRESENT and not in Inventory (e.g. "say hello to Ciaran" while in the kitchen and Ciaran is not listed), the action fails: return action_result "failure", say in narrative_prose that they are not here, and include in node_impacts ONLY the location, ENTITIES PRESENT, and player — never add an entry for a character or object in another location. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. DO NOT change a node's adjectives unless the player's action directly involved that node and your narrative explicitly describes a change in that node's state. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node—no NPC becomes "less guarded" or "more friendly" just because the player entered or looked. Only change adjectives when the player did something to or with that node (e.g. talked to the NPC, used the object) and the narrative shows the change. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them.
+CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player — and NO OTHER node_ids. If the player tried to interact with someone or something not in ENTITIES PRESENT and not in Inventory (e.g. "say hello to Ciaran" while in the kitchen and Ciaran is not listed), the action fails: return action_result "failure", say in narrative_prose that they are not here, and include in node_impacts ONLY the location, ENTITIES PRESENT, and player — never add an entry for a character or object in another location. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. When the player interacted with an NPC or object and your narrative describes a change in that entity's state or disposition (e.g. NPC warms up, becomes less guarded, shows trust), you MUST set adjectives_new to match—otherwise the engine will not update and the next turn will contradict your prose. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them. Use reconciliation_notes if you notice your narrative described a state change that you did not reflect in adjectives_new (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
 
 Return ONLY this JSON structure:
 {
@@ -269,7 +270,7 @@ Return ONLY this JSON structure:
       "node_id": "<exact node_id from CURRENT SCENE: e.g. scriptorium, ciaran, torch_01, or player—never 'location' or 'entities|name'>",
       "prose_impact": "<string: what this node experienced>",
       "adjectives_old": ["<current adjectives for this node from CURRENT SCENE>"],
-      "adjectives_new": ["<adjectives after this turn; same as adjectives_old if unchanged>"],
+      "adjectives_new": ["<adjectives after this turn; MUST match the state your narrative describes for that node—e.g. if narrative says NPC warmed up, remove \"guarded\" or add appropriate term; same as adjectives_old only if narrative shows no change>"],
       "new_location_id": "<optional: for a TAKEN object put new_location_id: \"player\" in THAT OBJECT'S entry (e.g. torch_01), not in the player's entry; for MOVEMENT set the player entry's new_location_id to the exit target e.g. \"kitchen\"; omit only if no take and no move>"
     }
   ],
@@ -397,6 +398,20 @@ function extractSingleJsonObjectString(raw: string): string | null {
  * Returns a Map from candidate (lowercase) to the term to use—either the existing vocabulary term
  * (exact match from the list) or the candidate itself if it is truly new.
  */
+function isNegationOrDiminution(candidate: string, vocabTerm: string): boolean {
+  const c = candidate.trim().toLowerCase();
+  const v = vocabTerm.trim().toLowerCase();
+  if (!v) return false;
+  const vUnderscore = v.replace(/\s+/g, "_");
+  if (c === v || c === vUnderscore) return false;
+  const diminutionPrefixes = ["less ", "less_", "more ", "more_", "no longer ", "no_longer_", "not ", "not_", "un", "no "];
+  for (const prefix of diminutionPrefixes) {
+    const rest = c.startsWith(prefix) ? c.slice(prefix.length).trim().replace(/\s+/g, "_") : "";
+    if (rest && (rest === v || rest === vUnderscore || v === rest || vUnderscore === rest)) return true;
+  }
+  return false;
+}
+
 export async function resolveRedundantAdjectives(
   candidates: string[],
   existingVocabulary: { adjective: string }[]
@@ -418,12 +433,14 @@ export async function resolveRedundantAdjectives(
 EXISTING VOCABULARY (use these exact spellings when replacing):
 ${vocabList.map((a) => `- ${a}`).join("\n")}
 
-CANDIDATE TERMS (these are not in the vocabulary yet; some may be redundant with existing terms above):
+CANDIDATE TERMS (these are not in the vocabulary yet; some may be true synonyms of existing terms):
 ${terms.join(", ")}
 
-For each candidate term: if it has the same or very similar meaning to an existing vocabulary term, respond with that existing term exactly as listed above. Otherwise respond with the candidate unchanged (the game will define it as new).
+For each candidate: if it has the SAME meaning as an existing vocabulary term (true synonym, e.g. "angry" and "hostile" both mean the same), respond with that existing term exactly as listed. Otherwise respond with the candidate unchanged (the game will define it as new).
 
-CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list above—exact spelling—OR (2) the candidate itself unchanged. Do not invent new terms (e.g. "not_in_vocabulary" is wrong). Example: {"content": "settled", "warm": "warm"} if "content" is redundant with "settled" and "warm" is new.
+DO NOT map a candidate to an existing term when the candidate expresses a lessening, negation, or opposite of that term. "Less guarded", "less_guarded", "no longer guarded", "unarmed", "not hostile" are NOT synonyms for "guarded" or "hostile"—they describe a different state (e.g. someone who was guarded and is now less so). Return those candidates unchanged. Only map when the two words mean the same thing (e.g. "mad" -> "hostile" when both mean angry).
+
+CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list—exact spelling—only when it is a true synonym, OR (2) the candidate itself unchanged. Example: {"content": "settled", "less_guarded": "less_guarded"} if "content" is a synonym for "settled" and "less_guarded" is a distinct state (not a synonym for "guarded").
 
 Return ONLY the JSON object. No other text.`;
   if (DEBUG) {
@@ -453,7 +470,11 @@ Return ONLY the JSON object. No other text.`;
       const valueLower = value.toLowerCase();
       if (value && vocabLower.has(valueLower)) {
         const existing = vocabList.find((v) => v.toLowerCase() === valueLower)!;
-        result.set(key, existing);
+        if (isNegationOrDiminution(candidate, existing)) {
+          result.set(key, candidate.trim());
+        } else {
+          result.set(key, existing);
+        }
       } else {
         result.set(key, candidate.trim());
       }

@@ -23,6 +23,7 @@ export interface TakeTurnOutput {
   result: "success" | "failure" | "partial" | "error";
   prose: string;
   error?: string;
+  reconciliation_notes?: string | null;
 }
 
 export interface UpdateNodeAdjectivesArgs {
