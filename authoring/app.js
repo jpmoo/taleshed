@@ -313,6 +313,11 @@
     if (maxScrollTop > 0) wrap.scrollTop = maxScrollTop * 0.5;
   }
 
+  var lastApplyWrapW = 0;
+  var lastApplyWrapH = 0;
+  var lastApplyZoomTime = 0;
+  var applyZoomThrottleMs = 400;
+
   /** Set zoom wrapper size, canvas size (at least viewport and content + PAN_MARGIN), then center scroll. */
   function applyZoom() {
     const wrap = document.getElementById("grid-wrap");
@@ -333,12 +338,17 @@
     const w = wrap.clientWidth || 0;
     const h = wrap.clientHeight || 0;
     if (w < 1 || h < 1) return;
+    /* Skip canvas/scroll update if wrap size unchanged (avoids slide from duplicate applyZoom). */
+    if (w === lastApplyWrapW && h === lastApplyWrapH) return;
+    lastApplyWrapW = w;
+    lastApplyWrapH = h;
+    lastApplyZoomTime = Date.now();
     /* Canvas must fit scaled content and have margin so scroll exists; zoom wrapper is centered in canvas. */
     const cw = Math.max(w, sw) + PAN_MARGIN;
     const ch = Math.max(h, sh) + PAN_MARGIN;
     canvas.style.width = cw + "px";
     canvas.style.height = ch + "px";
-    /* Set scroll to center the viewport on the canvas using the sizes we just set (no dependency on layout flush). */
+    /* Set scroll to center the viewport on the canvas using the sizes we just set. */
     const maxScrollLeft = Math.max(0, cw - w);
     const maxScrollTop = Math.max(0, ch - h);
     if (maxScrollLeft > 0) wrap.scrollLeft = maxScrollLeft * 0.5;
@@ -349,6 +359,8 @@
     const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(Number(value)) || 100));
     if (next === zoomPercent) return;
     zoomPercent = next;
+    lastApplyWrapW = 0;
+    lastApplyWrapH = 0;
     applyZoom();
   }
 
@@ -432,7 +444,13 @@
       });
       layer.appendChild(box);
     });
-    applyZoom();
+    lastApplyWrapW = 0;
+    lastApplyWrapH = 0;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        applyZoom();
+      });
+    });
   }
 
   function setupPanAndDrag() {
@@ -442,19 +460,12 @@
       return;
     }
 
-    function getClientX(e) {
-      return e.touches ? e.touches[0].clientX : e.clientX;
-    }
-    function getClientY(e) {
-      return e.touches ? e.touches[0].clientY : e.clientY;
-    }
-
     function onMove(e) {
       if (!panState) return;
       var maxScrollX = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
       var maxScrollY = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
-      var newLeft = panState.startScrollLeft + (panState.startX - getClientX(e));
-      var newTop = panState.startScrollTop + (panState.startY - getClientY(e));
+      var newLeft = panState.startScrollLeft + (panState.startX - e.clientX);
+      var newTop = panState.startScrollTop + (panState.startY - e.clientY);
       wrap.scrollLeft = Math.max(0, Math.min(maxScrollX, newLeft));
       wrap.scrollTop = Math.max(0, Math.min(maxScrollY, newTop));
     }
@@ -463,9 +474,6 @@
       panState = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      document.removeEventListener("touchmove", onMove, { passive: false });
-      document.removeEventListener("touchend", onUp);
-      document.removeEventListener("touchcancel", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     }
@@ -481,6 +489,7 @@
       document.body.style.userSelect = "none";
     }
 
+    /* Pan only on mouse click+drag; touch does not pan (user can scroll the page). */
     wrap.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       if (e.target.closest(".location-box")) return;
@@ -490,16 +499,6 @@
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     }, true);
-
-    wrap.addEventListener("touchstart", (e) => {
-      if (e.target.closest(".location-box")) return;
-      if (e.touches.length !== 1) return;
-      e.preventDefault();
-      startPan(e.touches[0].clientX, e.touches[0].clientY);
-      document.addEventListener("touchmove", onMove, { passive: false });
-      document.addEventListener("touchend", onUp);
-      document.addEventListener("touchcancel", onUp);
-    }, { passive: false });
 
     wrap.addEventListener("dragstart", (e) => {
       if (!e.target.closest(".location-box")) e.preventDefault();
@@ -666,7 +665,10 @@
       zoomInput.addEventListener("blur", () => { zoomInput.value = zoomPercent; });
     }
     window.addEventListener("resize", function () {
-      if (document.getElementById("panel-world-graph").classList.contains("active")) applyZoom();
+      if (!document.getElementById("panel-world-graph").classList.contains("active")) return;
+      lastApplyWrapW = 0;
+      lastApplyWrapH = 0;
+      applyZoom();
     });
     var wrapEl = document.getElementById("grid-wrap");
     var panelEl = document.getElementById("panel-world-graph");
@@ -674,6 +676,7 @@
       var resizeScheduled = false;
       var onResize = function () {
         if (!panelEl || !panelEl.classList.contains("active")) return;
+        if (Date.now() - lastApplyZoomTime < applyZoomThrottleMs) return;
         if (resizeScheduled) return;
         resizeScheduled = true;
         requestAnimationFrame(function () {
