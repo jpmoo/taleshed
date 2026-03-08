@@ -349,20 +349,12 @@
     if (wrap && canvas) {
       var wrapW = wrap.clientWidth || 0;
       var wrapH = wrap.clientHeight || 0;
-      var contentLarger = wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH);
-      if (contentLarger) {
-        canvas.style.position = "relative";
-        canvas.style.top = canvas.style.left = canvas.style.right = canvas.style.bottom = "";
+      if (wrapW > 0 && wrapH > 0 && (sw > wrapW || sh > wrapH)) {
         canvas.style.width = sw + "px";
         canvas.style.height = sh + "px";
       } else {
-        canvas.style.position = "absolute";
-        canvas.style.top = "0";
-        canvas.style.left = "0";
-        canvas.style.right = "0";
-        canvas.style.bottom = "0";
-        canvas.style.width = "";
-        canvas.style.height = "";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
       }
     }
   }

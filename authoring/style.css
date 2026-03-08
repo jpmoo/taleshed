@@ -215,17 +215,20 @@ body {
 .grid-wrap {
   position: relative;
   overflow: auto;
-  min-height: 100%;
+  min-height: 0;
   cursor: grab;
   background: var(--paper);
   display: flex;
 }
 
-/* Canvas: fills wrap (JS sets absolute inset 0 when content fits) or has pixel size when content larger; zoom wrapper centered inside */
+/* Canvas: 100% when content fits (from JS), else pixel size; zoom wrapper centered inside; in flow so wrap has size */
 .grid-canvas {
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 0;
+  min-height: 0;
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
