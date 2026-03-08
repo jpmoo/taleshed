@@ -357,10 +357,7 @@
     if (wrap && canvas) {
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
-      if (w <= 0 || h <= 0) {
-        w = document.documentElement.clientWidth || window.innerWidth || 800;
-        h = document.documentElement.clientHeight || window.innerHeight || 600;
-      }
+      if (w <= 0 || h <= 0) return;
       var panMargin = 200;
       canvas.style.width = (Math.max(w, sw) + panMargin) + "px";
       canvas.style.height = (Math.max(h, sh) + panMargin) + "px";
