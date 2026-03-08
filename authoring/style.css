@@ -212,12 +212,11 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
-/* World graph: wrap is scroll container; must not grow with content so scroll/pan work. */
-#panel-world-graph .grid-wrap {
+/* World graph: wrap is scroll container; min-height 0 so it doesn't grow with canvas. */
+.grid-wrap {
   position: relative;
-  flex: 1 1 0;
-  min-height: 0;
   overflow: auto;
+  min-height: 0;
   cursor: grab;
   background: var(--paper);
 }
@@ -229,8 +228,6 @@ body {
   flex-shrink: 0;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  box-sizing: border-box;
 }
 
 .grid-zoom-wrapper {

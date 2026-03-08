@@ -356,11 +356,9 @@
     lastApplyWrapH = h;
     lastApplyZoomPercent = zoomPercent;
     lastApplyZoomTime = Date.now();
-    /* Canvas size from ref viewport; never shrink below current scroll size so pan range is preserved. */
-    const minCw = Math.max(viewW, sw) + PAN_MARGIN;
-    const minCh = Math.max(viewH, sh) + PAN_MARGIN;
-    const cw = Math.max(minCw, wrap.scrollWidth || 0);
-    const ch = Math.max(minCh, wrap.scrollHeight || 0);
+    /* Canvas size from ref viewport so scrollbars don't shrink canvas and kill vertical pan. */
+    const cw = Math.max(viewW, sw) + PAN_MARGIN;
+    const ch = Math.max(viewH, sh) + PAN_MARGIN;
     canvas.style.minWidth = cw + "px";
     canvas.style.minHeight = ch + "px";
     canvas.style.width = cw + "px";
