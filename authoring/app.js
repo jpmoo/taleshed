@@ -43,7 +43,7 @@
   const CAMERA_DIST_MAX = 400;
   let compassRose = null; /* 3D compass group; position updated each frame */
   var compassLowerLeftNDC = new THREE.Vector3(-0.82, -0.82, 0.22); /* lower-left corner, reused for unproject */
-  let sceneDirectionalLight = null; /* light position follows player location */
+  let sceneDirectionalLight = null; /* light follows camera: viewer is the light source */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
   const keysPressed = Object.create(null);
   const PAN_SPEED = 1.5;
@@ -333,9 +333,8 @@
     renderer3D = new THREE.WebGLRenderer({ canvas: canvas3D, antialias: true });
     renderer3D.setPixelRatio(window.devicePixelRatio || 1);
     renderer3D.setSize(wrap.clientWidth, wrap.clientHeight);
-    /* directional light follows player; position updated each frame in animate() */
+    /* directional light follows camera so viewer is the light source; updated each frame in animate() */
     sceneDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    sceneDirectionalLight.position.set(0, 25, 15);
     scene3D.add(sceneDirectionalLight);
     scene3D.add(sceneDirectionalLight.target);
     scene3D.add(new THREE.AmbientLight(0x404060, 0.5));
@@ -366,7 +365,7 @@
   function createCompassRose() {
     if (typeof THREE === "undefined") return null;
     var group = new THREE.Group();
-    group.scale.setScalar(0.35); /* small in corner */
+    group.scale.setScalar(0.15); /* small enough to fit in corner */
     var ringRadius = 12;
     var ringTube = 0.2;
     var ringGeo = new THREE.TorusGeometry(ringRadius, ringTube, 8, 32);
@@ -383,14 +382,15 @@
       { text: "S", x: 0, y: 0, z: ringRadius, rotY: 0 },
       { text: "W", x: -ringRadius, y: 0, z: 0, rotY: Math.PI / 2 },
     ];
+    var labelMatOpts = {
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      depthTest: false,
+    };
     cards.forEach(function (c) {
       var tex = makeCompassLabelTexture(c.text);
-      var mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
+      var mat = new THREE.MeshBasicMaterial(Object.assign({ map: tex }, labelMatOpts));
       var plane = new THREE.Mesh(labelGeo.clone(), mat);
       plane.position.set(c.x, c.y, c.z);
       plane.rotation.y = c.rotY;
@@ -402,12 +402,7 @@
     ];
     vertLabels.forEach(function (c) {
       var tex = makeCompassLabelTexture(c.text);
-      var mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
+      var mat = new THREE.MeshBasicMaterial(Object.assign({ map: tex }, labelMatOpts));
       var plane = new THREE.Mesh(labelGeo.clone(), mat);
       plane.position.set(c.x, c.y, c.z);
       plane.rotation.x = c.rotX;
@@ -615,19 +610,15 @@
       compassLowerLeftNDC.set(-0.82, -0.82, 0.22);
       compassLowerLeftNDC.unproject(camera3D);
       compassRose.position.copy(compassLowerLeftNDC);
+      compassRose.updateMatrixWorld(true);
+      compassRose.traverse(function (o) {
+        if (o.isMesh && o.material && o.material.map) o.lookAt(camera3D.position);
+      });
     }
-    if (sceneDirectionalLight && locations && locations.length > 0) {
-      var playerNode = allNodes.find(function (n) { return n.node_id === "player"; });
-      var playerLocationId = (playerNode && playerNode.location_id) || null;
-      var playerLoc = locations.find(function (l) { return l.node_id === playerLocationId; });
-      if (playerLoc) {
-        var px = Number(playerLoc.grid_x) || 0;
-        var py = Number(playerLoc.grid_y) || 0;
-        var pz = Number(playerLoc.grid_z) || 0;
-        sceneDirectionalLight.position.set(px + 15, py + 25, pz + 15);
-        sceneDirectionalLight.target.position.set(px, py, pz);
-        sceneDirectionalLight.target.updateMatrixWorld(true);
-      }
+    if (sceneDirectionalLight && camera3D) {
+      sceneDirectionalLight.position.copy(camera3D.position);
+      sceneDirectionalLight.target.position.set(focusPoint.x, focusPoint.y, focusPoint.z);
+      sceneDirectionalLight.target.updateMatrixWorld(true);
     }
     renderer3D.render(scene3D, camera3D);
     animationId = requestAnimationFrame(animate);
