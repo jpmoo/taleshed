@@ -332,7 +332,6 @@
 
   function applyZoom() {
     const wrap = document.getElementById("grid-wrap");
-    const canvasWrap = document.getElementById("grid-canvas-wrap");
     const canvas = document.getElementById("grid-canvas");
     const wrapper = document.getElementById("grid-zoom-wrapper");
     const content = document.getElementById("grid-content");
@@ -348,28 +347,14 @@
       input.value = zoomPercent;
     }
     if (wrap && canvas) {
-      canvas.style.width = Math.max(1, sw) + "px";
-      canvas.style.height = Math.max(1, sh) + "px";
-    }
-    if (wrap && canvasWrap) {
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
       if (w > 0 && h > 0) {
-        var contentLarger = sw > w || sh > h;
-        if (contentLarger) {
-          canvasWrap.style.position = "relative";
-          canvasWrap.style.top = canvasWrap.style.left = canvasWrap.style.right = canvasWrap.style.bottom = "";
-          canvasWrap.style.width = sw + "px";
-          canvasWrap.style.height = sh + "px";
-        } else {
-          canvasWrap.style.position = "absolute";
-          canvasWrap.style.top = "0";
-          canvasWrap.style.left = "0";
-          canvasWrap.style.right = "0";
-          canvasWrap.style.bottom = "0";
-          canvasWrap.style.width = "";
-          canvasWrap.style.height = "";
-        }
+        canvas.style.width = Math.max(w, sw) + "px";
+        canvas.style.height = Math.max(h, sh) + "px";
+      } else {
+        canvas.style.width = Math.max(1, sw) + "px";
+        canvas.style.height = Math.max(1, sh) + "px";
       }
     }
   }

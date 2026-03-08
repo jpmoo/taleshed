@@ -212,37 +212,31 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
-/* Grid paper on wrap; wrap must fill panel so grid fills viewport */
 .grid-wrap {
   position: relative;
   overflow: auto;
-  min-height: 100%;
+  min-height: 0;
   cursor: grab;
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: var(--block) var(--block);
-  background-position: 0 0;
-}
-
-/* When content fits: JS sets position absolute + inset 0 so this fills wrap and centers canvas. When content larger: in-flow with content size for scroll. */
-.grid-canvas-wrap {
+  background: var(--paper);
   display: flex;
   justify-content: center;
   align-items: center;
-  box-sizing: border-box;
 }
 
-/* Canvas: content size (set in JS); no background so grid on wrap shows through */
+/* Canvas: JS sets to max(viewport, content) when wrap has size so it fills view and centers content; grid on canvas */
 .grid-canvas {
+  margin: auto;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   min-width: 0;
   min-height: 0;
-  background: transparent;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: var(--block) var(--block);
+  background-position: 0 0;
 }
 
 .grid-zoom-wrapper {
