@@ -348,23 +348,65 @@
     camera3D.updateMatrixWorld(true);
   }
 
-  function makeLabelTexture(name) {
-    const w = 256;
-    const h = 64;
-    const canvas = document.createElement("canvas");
+  function hexToCss(hex) {
+    const n = parseInt(hex, 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+
+  function makeFaceLabelTexture(shortName, bgHex) {
+    var w = 256;
+    var h = 64;
+    var canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#f5f0e6";
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = hexToCss(bgHex);
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#1a1a1a";
-    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.font = "bold 24px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(name).slice(0, 24), w / 2, h / 2);
-    const tex = new THREE.CanvasTexture(canvas);
+    ctx.fillText(String(shortName).slice(0, 12), w / 2, h / 2);
+    var tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
+  }
+
+  var FACE_LABEL_OFFSET = 0.01;
+  var LABEL_STRIP_H = 0.8;
+  var LABEL_STRIP_W = 4;
+  var HALF = LOCATION_SIZE / 2;
+  var LOWEST_ROW_CENTER = -HALF + LABEL_STRIP_H / 2;
+
+  function addFaceLabelsForLocation(scene, gx, gy, gz, shortName, fullName, nodeId, isPlayer) {
+    var bgHex = isPlayer ? "66bb6a" : "f5f0e6";
+    var tex = makeFaceLabelTexture(shortName, bgHex);
+    var mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: false,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+    });
+    var geo = new THREE.PlaneGeometry(LABEL_STRIP_W, LABEL_STRIP_H);
+    var faces = [
+      { pos: [HALF + FACE_LABEL_OFFSET, LOWEST_ROW_CENTER, 0], rot: [0, -Math.PI / 2, 0] },
+      { pos: [-HALF - FACE_LABEL_OFFSET, LOWEST_ROW_CENTER, 0], rot: [0, Math.PI / 2, 0] },
+      { pos: [0, HALF + FACE_LABEL_OFFSET, LOWEST_ROW_CENTER], rot: [-Math.PI / 2, 0, 0] },
+      { pos: [0, -HALF - FACE_LABEL_OFFSET, LOWEST_ROW_CENTER], rot: [Math.PI / 2, 0, 0] },
+      { pos: [0, LOWEST_ROW_CENTER, HALF + FACE_LABEL_OFFSET], rot: [0, 0, 0] },
+      { pos: [0, LOWEST_ROW_CENTER, -HALF - FACE_LABEL_OFFSET], rot: [0, Math.PI, 0] },
+    ];
+    for (var i = 0; i < faces.length; i++) {
+      var plane = new THREE.Mesh(geo.clone(), mat);
+      plane.position.set(gx + faces[i].pos[0], gy + faces[i].pos[1], gz + faces[i].pos[2]);
+      plane.rotation.set(faces[i].rot[0], faces[i].rot[1], faces[i].rot[2]);
+      plane.userData = { nodeId: nodeId, fullName: fullName };
+      scene.add(plane);
+      labelMeshes.push(plane);
+    }
   }
 
   function buildScene3D() {
@@ -379,11 +421,15 @@
       m.geometry.dispose();
       if (m.material) m.material.dispose();
     });
+    var disposedMats = new Set();
     labelMeshes.forEach(function (m) {
       scene3D.remove(m);
       m.geometry.dispose();
-      if (m.material && m.material.map) m.material.map.dispose();
-      if (m.material) m.material.dispose();
+      if (m.material && !disposedMats.has(m.material)) {
+        disposedMats.add(m.material);
+        if (m.material.map) m.material.map.dispose();
+        m.material.dispose();
+      }
     });
     locationMeshes = [];
     tunnelMeshes = [];
@@ -393,37 +439,35 @@
     const playerLocationId = (playerNode && playerNode.location_id) || null;
     const boxGeo = new THREE.BoxGeometry(LOCATION_SIZE, LOCATION_SIZE, LOCATION_SIZE);
     const tunnelGeo = new THREE.BoxGeometry(TUNNEL_CROSS, TUNNEL_CROSS, TUNNEL_LENGTH);
-    const matDefault = new THREE.MeshPhongMaterial({ color: 0xf5f0e6 });
-    const matCurrent = new THREE.MeshPhongMaterial({ color: 0x66bb6a });
-    const matTunnel = new THREE.MeshPhongMaterial({ color: 0x8d8d8d });
+    const matDefault = new THREE.MeshPhongMaterial({
+      color: 0xe8e4d8,
+      emissive: 0x2a2a28,
+    });
+    const matCurrent = new THREE.MeshPhongMaterial({
+      color: 0x66bb6a,
+      emissive: 0x1a331a,
+    });
+    const matTunnel = new THREE.MeshPhongMaterial({
+      color: 0x9a9a9a,
+      emissive: 0x222222,
+    });
 
     locations.forEach(function (loc) {
       const gx = Number(loc.grid_x) || 0;
       const gy = Number(loc.grid_y) || 0;
       const gz = Number(loc.grid_z) || 0;
+      const isPlayerLoc = loc.node_id === playerLocationId;
       const mesh = new THREE.Mesh(
         boxGeo.clone(),
-        loc.node_id === playerLocationId ? matCurrent : matDefault
+        isPlayerLoc ? matCurrent : matDefault
       );
       mesh.position.set(gx, gy, gz);
-      mesh.userData = { nodeId: loc.node_id };
+      mesh.userData = { nodeId: loc.node_id, fullName: loc.name || loc.node_id };
       scene3D.add(mesh);
       locationMeshes.push({ mesh: mesh, nodeId: loc.node_id });
 
-      var labelTex = makeLabelTexture(loc.name || loc.node_id);
-      var labelMat = new THREE.MeshBasicMaterial({
-        map: labelTex,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      var labelGeo = new THREE.PlaneGeometry(4, 0.8);
-      var labelPlane = new THREE.Mesh(labelGeo, labelMat);
-      labelPlane.position.set(gx, gy - LOCATION_SIZE / 2 - 0.01, gz);
-      labelPlane.rotation.x = -Math.PI / 2;
-      labelPlane.userData = { nodeId: loc.node_id };
-      scene3D.add(labelPlane);
-      labelMeshes.push(labelPlane);
+      var shortName = (loc.name || loc.node_id).slice(0, 12);
+      addFaceLabelsForLocation(scene3D, gx, gy, gz, shortName, loc.name || loc.node_id, loc.node_id, isPlayerLoc);
 
       const exits = parseExits(loc.exits);
       exits.forEach(function (e) {
@@ -443,6 +487,7 @@
         );
         tunnel.rotation.y = Math.atan2(nx, nz);
         tunnel.rotation.x = -Math.asin(ny);
+        tunnel.userData = { exitLabel: e.label || "(exit)" };
         scene3D.add(tunnel);
         tunnelMeshes.push(tunnel);
       });
@@ -522,6 +567,42 @@
       cameraDistance = Math.max(CAMERA_DIST_MIN, Math.min(CAMERA_DIST_MAX, cameraDistance + delta));
       updateCameraPosition();
     }, { passive: false });
+
+    var tooltipEl = document.getElementById("graph-tooltip");
+    canvas.addEventListener("mousemove", function (e) {
+      if (dragState || typeof THREE === "undefined" || !camera3D || !scene3D) {
+        if (tooltipEl) tooltipEl.classList.add("hidden");
+        return;
+      }
+      var rect = canvas.getBoundingClientRect();
+      var mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      var my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      var raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(mx, my), camera3D);
+      var allPickable = locationMeshes.map(function (o) { return o.mesh; }).concat(labelMeshes).concat(tunnelMeshes);
+      var hits = raycaster.intersectObjects(allPickable);
+      if (hits.length > 0 && tooltipEl) {
+        var ud = hits[0].object.userData;
+        if (ud.fullName) {
+          tooltipEl.textContent = ud.fullName;
+          tooltipEl.classList.remove("hidden");
+          tooltipEl.style.left = (e.clientX + 12) + "px";
+          tooltipEl.style.top = (e.clientY + 12) + "px";
+        } else if (ud.exitLabel) {
+          tooltipEl.textContent = ud.exitLabel;
+          tooltipEl.classList.remove("hidden");
+          tooltipEl.style.left = (e.clientX + 12) + "px";
+          tooltipEl.style.top = (e.clientY + 12) + "px";
+        } else {
+          tooltipEl.classList.add("hidden");
+        }
+      } else if (tooltipEl) {
+        tooltipEl.classList.add("hidden");
+      }
+    });
+    canvas.addEventListener("mouseleave", function () {
+      if (tooltipEl) tooltipEl.classList.add("hidden");
+    });
 
     canvas.addEventListener("click", function (e) {
       if (e.button !== 0 || dragState) return;

@@ -232,6 +232,49 @@ body {
   cursor: grabbing;
 }
 
+.graph-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10;
+  max-width: 240px;
+  padding: 6px 10px;
+  background: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.graph-tooltip.hidden {
+  display: none;
+}
+
+.graph-orientation {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: 70px;
+  height: 70px;
+  pointer-events: none;
+  z-index: 2;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto auto;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.graph-orient-up   { grid-column: 2; grid-row: 1; }
+.graph-orient-w   { grid-column: 1; grid-row: 2; }
+.graph-orient-n   { grid-column: 2; grid-row: 2; }
+.graph-orient-e   { grid-column: 3; grid-row: 2; }
+.graph-orient-s   { grid-column: 2; grid-row: 3; }
+.graph-orient-down { grid-column: 2; grid-row: 4; }
+
 /* Modal */
 .modal-backdrop {
   position: fixed;
