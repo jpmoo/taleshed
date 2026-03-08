@@ -42,7 +42,7 @@
   const CAMERA_DIST_MIN = 20;
   const CAMERA_DIST_MAX = 400;
   let compassRose = null; /* 3D compass group; position updated each frame */
-  var compassLowerLeftNDC = new THREE.Vector3(-0.62, -0.32, 0.22); /* lower-left, nudged right 10% and up 25% */
+  var compassLowerLeftNDC = new THREE.Vector3(-0.82, -0.32, 0.22); /* lower-left, left 10% from prior */
   let sceneDirectionalLight = null; /* light follows camera: viewer is the light source */
   let dragState = null; /* { type: 'left'|'right', startX, startY, startYaw, startPitch, startFocus } */
   const keysPressed = Object.create(null);
@@ -345,15 +345,15 @@
   }
 
   function makeCompassLabelTexture(text) {
-    var w = 128;
-    var h = 64;
+    var w = 320;
+    var h = 160;
     var canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
     var ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "rgba(230, 230, 230, 0.95)";
-    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.font = "bold 70px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, w / 2, h / 2);
@@ -373,8 +373,8 @@
     var ringMat = new THREE.MeshBasicMaterial({ color: 0x606070 });
     var ring = new THREE.Mesh(ringGeo, ringMat);
     group.add(ring);
-    var labelW = 2.5;
-    var labelH = 1.2;
+    var labelW = 2.5 * 2.5;
+    var labelH = 1.2 * 2.5;
     var labelGeo = new THREE.PlaneGeometry(labelW, labelH);
     var cards = [
       { text: "N", x: 0, y: 0, z: -ringRadius, rotY: Math.PI },
@@ -607,7 +607,7 @@
     if (!renderer3D || !scene3D || !camera3D) return;
     applyWasdPan();
     if (compassRose && camera3D) {
-      compassLowerLeftNDC.set(-0.62, -0.32, 0.22);
+      compassLowerLeftNDC.set(-0.82, -0.32, 0.22);
       compassLowerLeftNDC.unproject(camera3D);
       compassRose.position.copy(compassLowerLeftNDC);
       compassRose.updateMatrixWorld(true);
