@@ -355,12 +355,21 @@
       var w = wrap.clientWidth || 0;
       var h = wrap.clientHeight || 0;
       if (w > 0 && h > 0) {
-        var cw = Math.max(w, sw);
-        var ch = Math.max(h, sh);
-        canvasWrap.style.width = cw + "px";
-        canvasWrap.style.height = ch + "px";
-        canvasWrap.style.minWidth = "";
-        canvasWrap.style.minHeight = "";
+        var contentLarger = sw > w || sh > h;
+        if (contentLarger) {
+          canvasWrap.style.position = "relative";
+          canvasWrap.style.top = canvasWrap.style.left = canvasWrap.style.right = canvasWrap.style.bottom = "";
+          canvasWrap.style.width = sw + "px";
+          canvasWrap.style.height = sh + "px";
+        } else {
+          canvasWrap.style.position = "absolute";
+          canvasWrap.style.top = "0";
+          canvasWrap.style.left = "0";
+          canvasWrap.style.right = "0";
+          canvasWrap.style.bottom = "0";
+          canvasWrap.style.width = "";
+          canvasWrap.style.height = "";
+        }
       }
     }
   }

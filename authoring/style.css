@@ -212,11 +212,11 @@ body {
 }
 .toolbar-option input { width: auto; }
 #panel-nodes.nodes-hide-locations .node-row-location { display: none; }
-/* Grid paper on wrap so it always fills the visible viewport */
+/* Grid paper on wrap; wrap must fill panel so grid fills viewport */
 .grid-wrap {
   position: relative;
   overflow: auto;
-  min-height: 0;
+  min-height: 100%;
   cursor: grab;
   background-color: var(--paper);
   background-image:
@@ -226,7 +226,7 @@ body {
   background-position: 0 0;
 }
 
-/* Inner wrapper: sized in JS to max(viewport, content); flex centers the canvas */
+/* When content fits: JS sets position absolute + inset 0 so this fills wrap and centers canvas. When content larger: in-flow with content size for scroll. */
 .grid-canvas-wrap {
   display: flex;
   justify-content: center;
