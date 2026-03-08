@@ -302,6 +302,15 @@ app.get("/api/history-ledger", (_req: Request, res: Response) => {
   }
 });
 
+app.delete("/api/history-ledger/clear", (_req: Request, res: Response) => {
+  try {
+    db.prepare("DELETE FROM history_ledger").run();
+    res.status(204).end();
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 app.get("/api/history-ledger/:entry_id", (req: Request, res: Response) => {
   try {
     const id = Number(req.params.entry_id);

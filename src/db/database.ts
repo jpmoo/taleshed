@@ -63,6 +63,20 @@ export function getEntitiesInLocation(db: Database.Database, locationId: string)
     .all(locationId) as WorldNode[];
 }
 
+/** Follow location_id until a location node; return that node_id or null. Used to ensure we only show entities whose containment chain ends at the current room. */
+export function getRootLocationId(db: Database.Database, nodeId: string): string | null {
+  const seen = new Set<string>();
+  let current = getNode(db, nodeId);
+  while (current) {
+    if (seen.has(current.node_id)) return null;
+    seen.add(current.node_id);
+    if (current.node_type === "location") return current.node_id;
+    if (!current.location_id || !current.location_id.trim()) return null;
+    current = getNode(db, current.location_id.trim());
+  }
+  return null;
+}
+
 /** Entities in a location, plus entities contained in objects in that location (one level). Contents are only included if the container is not closed. Order: each direct entity then its contents. */
 export function getEntitiesInLocationIncludingContents(db: Database.Database, locationId: string): WorldNode[] {
   const direct = getEntitiesInLocation(db, locationId);

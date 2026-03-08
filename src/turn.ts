@@ -9,6 +9,7 @@ import {
   getNode,
   getEntitiesInLocation,
   getEntitiesInLocationIncludingContents,
+  getRootLocationId,
   getPlayerInventory,
   getRecentHistoryForNode,
   getFullVocabulary,
@@ -188,10 +189,11 @@ function assembleDestinationScene(db: Database.Database, locationId: string): De
   const location = getNode(db, locationId);
   if (!location || location.node_type !== "location") return null;
   const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
+  const inLocationSameRoot = inLocationRaw.filter((n) => getRootLocationId(db, n.node_id) === locationId);
   const npcIdsInRoom = new Set(
-    inLocationRaw.filter((n) => n.node_type === "npc").map((n) => n.node_id)
+    inLocationSameRoot.filter((n) => n.node_type === "npc").map((n) => n.node_id)
   );
-  const inLocation = inLocationRaw.filter((n) => {
+  const inLocation = inLocationSameRoot.filter((n) => {
     if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
     return true;
   });
@@ -292,11 +294,13 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   if (!location) return null;
 
   const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
+  // Only show entities whose containment chain ends at this location (e.g. torch in bracket in scriptorium shows in scriptorium only, not in cloister).
+  const inLocationSameRoot = inLocationRaw.filter((n) => getRootLocationId(db, n.node_id) === locationId);
   const npcIdsInRoom = new Set(
-    inLocationRaw.filter((n) => n.node_type === "npc").map((n) => n.node_id)
+    inLocationSameRoot.filter((n) => n.node_type === "npc").map((n) => n.node_id)
   );
-  // Only show entities in the room: exclude anything whose location is the player or an NPC (player/NPC inventory).
-  const inLocation = inLocationRaw.filter((n) => {
+  // Exclude anything whose location is the player or an NPC (player/NPC inventory).
+  const inLocation = inLocationSameRoot.filter((n) => {
     if (n.location_id === player.node_id) return false;
     if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
     return true;

@@ -1075,6 +1075,15 @@
       .catch((err) => alert("Delete failed: " + (err.message || err)));
   });
   document.getElementById("history-add").addEventListener("click", () => openHistoryModal(null));
+  document.getElementById("history-clear").addEventListener("click", () => {
+    if (!confirm("Clear all history? This returns the game to a starting state (no past turns or bookmarks). The world graph is unchanged: objects and characters may have moved, and their adjectives may have changed. This cannot be undone.")) return;
+    fetch(apiUrl("/api/history-ledger/clear"), { method: "DELETE" })
+      .then((r) => {
+        if (r.status !== 204 && r.status !== 200) return r.json().then((j) => Promise.reject(new Error(j.error || r.statusText)));
+        fetchHistory();
+      })
+      .catch((err) => alert("Clear failed: " + (err.message || err)));
+  });
   document.querySelectorAll(".modal-history-close, .modal-history-cancel").forEach((el) => el.addEventListener("click", () => {
     document.getElementById("modal-history").classList.add("hidden");
     document.getElementById("modal-history-backdrop").classList.add("hidden");
