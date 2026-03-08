@@ -495,7 +495,7 @@
       else wrap.style.cursor = "grab";
     });
     wrap.addEventListener("mouseout", () => {
-      if (!panState && !dragState) wrap.style.cursor = "";
+      if (!panState) wrap.style.cursor = "";
     });
 
     wrap.addEventListener("wheel", (e) => {

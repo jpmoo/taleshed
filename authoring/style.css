@@ -221,8 +221,9 @@ body {
   display: flex;
 }
 
-/* Canvas: 100% when content fits (from JS), else pixel size; zoom wrapper centered inside; in flow so wrap has size */
+/* Canvas: 100% when content fits (from JS), else pixel size; margin auto centers if smaller than wrap; zoom wrapper centered inside */
 .grid-canvas {
+  margin: auto;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
