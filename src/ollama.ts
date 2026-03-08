@@ -120,12 +120,12 @@ CRITICAL — DO NOT TAKE UNSPECIFIED ACTIONS:
 - Interpret the player's action literally. Do only the exact action(s) the player stated. Do not infer, assume, or add any action the player did not explicitly request.
 - "Take X" means only: add X to the player's inventory. In node_impacts, the **object that was taken** (e.g. torch_01) MUST have new_location_id set to "player" in **that object's own entry**—the engine moves the object only when that object's entry has new_location_id: "player". Do NOT put new_location_id on the player entry for a take (the player's new_location_id is only for movement to a location like kitchen). Do NOT add an adjective to the object; use new_location_id only. Example: if the player says "take torch", then the torch_01 entry has new_location_id: "player"; the player entry has no new_location_id (or only for movement). If you omit new_location_id on the taken object, the object will stay where it is (e.g. in the bracket). Lighting or using an object in place (e.g. lighting the torch in its bracket so the room has light) does NOT move the object: set new_location_id to "player" only when the player explicitly takes the object (e.g. "take torch"). If your narrative says the object remains where it is (e.g. "the torch in its bracket", "you bring flame to the torch in its bracket"), do NOT set new_location_id for that object.
 - For any object: taking it does not imply using it. Using, lighting, activating, opening, or otherwise changing an object's state requires an explicit player command for that action. One verb = one action. "Take torch and go through door" = take (inventory) + move; the torch is still unlit unless the player also said to light it.
-- Offering or asking is not doing. If the player only offers or asks (e.g. "would you like some light?", "shall I open the door?", "want me to give you the key?"), do not perform that action. Narrate the offer and the NPC's (or world's) response only; the action does not happen until the player gives an explicit command (e.g. "light the torch", "open the door", "give him the key"). One verb = one action; offers and questions are not verbs that change world state.
+- Offering or asking is not doing. If the player only offers or asks (e.g. "would you like some light?", "offer to light the torch", "shall I open the door?", "want me to give you the key?"), do NOT perform that action. Narrate the offer and the NPC's (or world's) response only; the action does not happen until the player gives an explicit command (e.g. "light the torch", "open the door", "give him the key"). Do NOT change any object's or location's state (e.g. lit, open, unlocked, activated) when the player only offered—only an explicit command performs the action.
 - If the player's command has multiple parts (e.g. "take X and go through door"), perform exactly those parts and no others. Do not add a third action (e.g. lighting the torch) because it would be "helpful" or "realistic"—only the player can request that.
 
 CRITICAL — NO THINGS HAPPENING "BY THEMSELVES":
 - Objects and the world do NOT change state on their own. Nothing may light, ignite, catch fire, activate, open, close, unlock, or otherwise change (e.g. unlit → lit) unless the player explicitly performed an action that causes that change (e.g. "light the torch", "use the key").
-- FORBIDDEN in narrative: having a torch (or lamp, candle, etc.) light "of its own accord", "by the logic of this world", "apparently of its own accord", "it catches", "a flame shivers to life", or any wording that implies the object changed state without the player doing something to cause it. If the player only took the torch, the torch stays unlit in their hand until they say they light it (and only then if a means exists in the scene).
+- FORBIDDEN in narrative: any object (torch, door, box, key, etc.) changing state "of its own accord", "by the logic of this world", "at the taking", "when you pick it up", "as you touch it", or similar—e.g. a torch "comes alight at the taking" or "already alight", a door "opens as you reach for it", a lock "unlocks at your touch". State changes (lit, open, unlocked, activated, etc.) require an explicit player action for that change. When the player only TAKES an object, its state does not change: do not describe it as lighting, opening, unlocking, activating, or otherwise changing—it keeps its current state (e.g. unlit stays unlit) until the player explicitly performs the action that changes it.
 - Do not use narrative convenience or atmosphere as a reason for state change. "It would be dramatic", "the scene needed light", or "it felt right" are not allowed. State changes require an explicit player action for that change.
 
 - An action that requires a means (e.g. lighting something, opening a lock) is only possible if the means exists in inventory or in ENTITIES PRESENT. Only objects listed in ENTITIES PRESENT (e.g. a hearth_fire object in the kitchen) can be used to light something; scenery or location description alone is not enough. Do not allow outcomes that inventory or ENTITIES PRESENT would not support.
@@ -258,7 +258,7 @@ function buildSectionE(
   return `PLAYER ACTION: ${playerCommand}
 START/BEGIN: If the player said "start" or "begin", only describe the scene. Do NOT have the player take, use, or move any object. Do NOT set new_location_id for any object. No state changes.
 ${containmentLine}TAKE: If the player takes an object, set new_location_id to "player" in **that object's** node_impacts entry (e.g. torch_01's entry gets new_location_id: "player"). Do NOT set the player's new_location_id to "player"—the player's new_location_id is only for movement to a location (e.g. kitchen). Without new_location_id on the taken object, the object will not move to the player. The object moves to the player; the player stays in a location. Only set new_location_id for an object when the player explicitly took it; if the narrative has the object stay in place (e.g. lighting the torch in its bracket), omit new_location_id for that object.
-Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light a torch if the player only said "take torch"; do not open a door or give an item if the player only offered or asked "shall I open it?" or "want me to give you that?"). Offers and questions do not perform the action. Never have objects change state on their own: no torch lighting by itself, no "it catches", "of its own accord", or "by the logic of this world"—only an explicit player action can change an object's state.
+Interpret the above literally. Do only what the player said—no extra actions (e.g. do not light, open, unlock, or activate anything if the player only said "take X" or only offered "shall I open it?" or "want me to give you that?"). Offers and questions do not perform the action. Never have any object change state on its own or upon being taken: no "it catches", "of its own accord", "at the taking", or "when you pick it up"—only an explicit player action can change an object's state.
 ${exitLine}${destinationLine}
 CRITICAL — node_impacts must include ONE entry for EACH of: the location (node_id in CURRENT SCENE), every entity in ENTITIES PRESENT, and the player — and NO OTHER node_ids. If the player tried to interact with someone or something not in ENTITIES PRESENT and not in Inventory (e.g. "say hello to Ciaran" while in the kitchen and Ciaran is not listed), the action fails: return action_result "failure", say in narrative_prose that they are not here, and include in node_impacts ONLY the location, ENTITIES PRESENT, and player — never add an entry for a character or object in another location. For each entry: adjectives_old MUST be that node's current adjectives exactly as shown in CURRENT SCENE; adjectives_new MUST be the adjectives after this turn. adjectives_new must only list game-relevant qualities (disposition, state like lit/closed)—never narrative moment phrases like "noticed looking up" or "observed as he worked"; use prose_impact for those. When the player interacted with an NPC or object and your narrative describes a change in that entity's state or disposition (e.g. NPC warms up, becomes less guarded, shows trust), you MUST set adjectives_new to match—otherwise the engine will not update and the next turn will contradict your prose. For "start", "look", "examine", "go east" (movement only), or any action that does not interact with an NPC or object: set adjectives_new equal to adjectives_old for every node. If a node's adjectives do not change, set BOTH adjectives_old and adjectives_new to the same array. Never use [] for a node that currently has adjectives unless you are explicitly clearing them. Use reconciliation_notes if you notice your narrative described a state change that you did not reflect in adjectives_new (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
 
@@ -413,6 +413,25 @@ function isNegationOrDiminution(candidate: string, vocabTerm: string): boolean {
   return false;
 }
 
+/** Disposition terms (NPC attitude); do not map object/location state phrases to these or vice versa. */
+const DISPOSITION_LIKE = new Set(
+  ["guarded", "less guarded", "hostile", "curious", "confiding", "watchful", "engaged", "scholarly", "sacred"].map((s) => s.toLowerCase())
+);
+function isObjectStateVsDisposition(candidate: string, vocabTerm: string): boolean {
+  const c = candidate.trim().toLowerCase();
+  const v = vocabTerm.trim().toLowerCase();
+  const candidateIsObjectState =
+    /\b(waiting|flame|spark|unlit|lit|illuminated|illumination|dark|bright|burning|glow|inventory|player's)\b/i.test(candidate) ||
+    /in player's inventory|better illuminated|waiting for/i.test(c);
+  const valueIsDisposition = DISPOSITION_LIKE.has(v);
+  if (candidateIsObjectState && valueIsDisposition) return true;
+  const valueIsObjectState =
+    /\b(lit|dark|broken|closed|locked|open|sealed)\b/.test(v);
+  const candidateLooksDisposition = DISPOSITION_LIKE.has(c) || /guard|curious|hostile|watchful|confiding|engaged|scholarly/i.test(candidate);
+  if (valueIsObjectState && candidateLooksDisposition) return true;
+  return false;
+}
+
 export async function resolveRedundantAdjectives(
   candidates: string[],
   existingVocabulary: { adjective: string }[]
@@ -439,7 +458,9 @@ ${terms.join(", ")}
 
 For each candidate: if it has the SAME meaning as an existing vocabulary term (true synonym, e.g. "angry" and "hostile" both mean the same), respond with that existing term exactly as listed. Otherwise respond with the candidate unchanged (the game will define it as new).
 
-DO NOT map a candidate to an existing term when the candidate expresses a lessening, negation, or opposite of that term. "Less guarded", "less_guarded", "no longer guarded", "unarmed", "not hostile" are NOT synonyms for "guarded" or "hostile"—they describe a different state (e.g. someone who was guarded and is now less so). Return those candidates unchanged. Only map when the two words mean the same thing (e.g. "mad" -> "hostile" when both mean angry).
+DO NOT map a candidate to an existing term when the candidate expresses a lessening, negation, or opposite of that term. "Less guarded", "less_guarded", "no longer guarded", "unarmed", "not hostile" are NOT synonyms for "guarded" or "hostile"—they describe a different state (e.g. someone who was guarded and is now less so). Return those candidates unchanged.
+DO NOT map object or location state phrases (e.g. "waiting for flame", "unlit", "better illuminated", "in player's inventory") to NPC disposition terms (e.g. curious, guarded, confiding)—they are different categories. Return those candidates unchanged.
+Only map when the two words mean the same thing (e.g. "mad" -> "hostile" when both mean angry).
 
 CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list—exact spelling—only when it is a true synonym, OR (2) the candidate itself unchanged. Example: {"content": "settled", "less_guarded": "less_guarded"} if "content" is a synonym for "settled" and "less_guarded" is a distinct state (not a synonym for "guarded").
 
@@ -471,7 +492,7 @@ Return ONLY the JSON object. No other text.`;
       const valueLower = value.toLowerCase();
       if (value && vocabLower.has(valueLower)) {
         const existing = vocabList.find((v) => v.toLowerCase() === valueLower)!;
-        if (isNegationOrDiminution(candidate, existing)) {
+        if (isNegationOrDiminution(candidate, existing) || isObjectStateVsDisposition(candidate, existing)) {
           result.set(key, candidate.trim());
         } else {
           result.set(key, existing);
