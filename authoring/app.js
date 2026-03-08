@@ -472,10 +472,13 @@
     }
 
     function onMove(e) {
-      if (panState) {
-        wrap.scrollLeft = panState.startScrollLeft + (panState.startX - getClientX(e));
-        wrap.scrollTop = panState.startScrollTop + (panState.startY - getClientY(e));
-      }
+      if (!panState) return;
+      var maxScrollX = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      var maxScrollY = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+      var newLeft = panState.startScrollLeft + (panState.startX - getClientX(e));
+      var newTop = panState.startScrollTop + (panState.startY - getClientY(e));
+      wrap.scrollLeft = Math.max(0, Math.min(maxScrollX, newLeft));
+      wrap.scrollTop = Math.max(0, Math.min(maxScrollY, newTop));
     }
 
     function onUp() {
@@ -504,10 +507,11 @@
       if (e.button !== 0) return;
       if (e.target.closest(".location-box")) return;
       e.preventDefault();
+      e.stopPropagation();
       startPan(e.clientX, e.clientY);
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
-    });
+    }, true);
 
     wrap.addEventListener("touchstart", (e) => {
       if (e.target.closest(".location-box")) return;
@@ -519,6 +523,9 @@
       document.addEventListener("touchcancel", onUp);
     }, { passive: false });
 
+    wrap.addEventListener("dragstart", (e) => {
+      if (!e.target.closest(".location-box")) e.preventDefault();
+    });
     wrap.addEventListener("mouseover", (e) => {
       if (panState) return;
       if (e.target.closest(".location-box")) wrap.style.cursor = "pointer";
