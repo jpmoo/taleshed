@@ -4,7 +4,7 @@
 
 import type Database from "better-sqlite3";
 import { takeTurnWithRetry } from "./turn.js";
-import { createBookmark, restoreToBookmark } from "./bookmark.js";
+import { createBookmark, listBookmarks, restoreToBookmark } from "./bookmark.js";
 import {
   getNode,
   updateWorldGraphAdjectives,
@@ -118,10 +118,18 @@ export function handleTakeTurn(db: Database.Database, args: TakeTurnArgs): Promi
   return takeTurnWithRetry(db, args.player_command, args.recent_history ?? "");
 }
 
-export function handleBookmark(db: Database.Database): { prose: string; entry_id: number } {
+export function handleBookmark(db: Database.Database): { prose: string; entry_id: number; number: number; description: string } {
   return createBookmark(db);
 }
 
-export function handleRestoreToBookmark(db: Database.Database): { prose: string; success: boolean } {
-  return restoreToBookmark(db);
+export function handleListBookmarks(db: Database.Database): { bookmarks: { number: number; entry_id: number; description: string }[]; prose: string } {
+  return listBookmarks(db);
+}
+
+export function handleRestoreToBookmark(
+  db: Database.Database,
+  bookmarkNumber: number | undefined,
+  confirm: boolean
+): { prose: string; success: boolean; needs_confirm?: boolean } {
+  return restoreToBookmark(db, bookmarkNumber, confirm);
 }

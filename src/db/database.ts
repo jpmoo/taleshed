@@ -95,6 +95,39 @@ export function getMostRecentBookmark(db: Database.Database): HistoryEntry | und
     .get() as HistoryEntry | undefined;
 }
 
+export interface BookmarkRow {
+  entry_id: number;
+  timestamp: string;
+  action_description: string | null;
+}
+
+/** All bookmarks in chronological order (entry_id ASC). Number in list is 1-based index. */
+export function getAllBookmarks(db: Database.Database): BookmarkRow[] {
+  return db
+    .prepare(
+      "SELECT entry_id, timestamp, action_description FROM history_ledger WHERE system_event = 'BOOKMARK' ORDER BY entry_id ASC"
+    )
+    .all() as BookmarkRow[];
+}
+
+/** Get bookmark by 1-based number (1 = first bookmark). Returns undefined if number out of range. */
+export function getBookmarkByNumber(db: Database.Database, number: number): BookmarkRow | undefined {
+  const all = getAllBookmarks(db);
+  const index = number >= 1 ? number - 1 : -1;
+  return all[index];
+}
+
+/** Recent history entries (excluding BOOKMARK/RESTORE) for building bookmark description. entry_id DESC, limit N. */
+export function getRecentHistoryForDescription(db: Database.Database, limit: number): HistoryEntry[] {
+  return db
+    .prepare(
+      `SELECT * FROM history_ledger
+       WHERE system_event IS NULL OR system_event NOT IN ('BOOKMARK', 'RESTORE')
+       ORDER BY entry_id DESC LIMIT ?`
+    )
+    .all(limit) as HistoryEntry[];
+}
+
 export function writeHistoryLedger(
   db: Database.Database,
   entries: {
@@ -170,13 +203,13 @@ export function insertVocabulary(
   ).run(adjective.toLowerCase(), ruleDescription, isStarter);
 }
 
-export function bookmark(db: Database.Database): number {
+export function bookmark(db: Database.Database, description: string | null): number {
   const now = ISO_NOW();
   const result = db
     .prepare(
-      "INSERT INTO history_ledger (timestamp, action_description, node_id, prose_impact, adjectives_old, adjectives_new, system_event) VALUES (?, NULL, 'SYSTEM', NULL, NULL, NULL, 'BOOKMARK')"
+      "INSERT INTO history_ledger (timestamp, action_description, node_id, prose_impact, adjectives_old, adjectives_new, system_event) VALUES (?, ?, 'SYSTEM', NULL, NULL, NULL, 'BOOKMARK')"
     )
-    .run(now);
+    .run(now, description ?? null);
   return result.lastInsertRowid as number;
 }
 

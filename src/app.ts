@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   handleTakeTurn,
   handleBookmark,
+  handleListBookmarks,
   handleRestoreToBookmark,
   handleUpdateNodeAdjectives,
 } from "./tools.js";
@@ -110,7 +111,8 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     "bookmark",
     {
       title: "Bookmark",
-      description: "Saves the current world state as a restore point. The player can return to this point later with restore_to_bookmark. No parameters.",
+      description:
+        "Saves the current world state as a restore point. The bookmark is numbered and given a short description from recent history. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers). No parameters.",
       inputSchema: z.object({}),
     },
     async () => {
@@ -120,14 +122,46 @@ export function createTaleshedServer(db: Database.Database): McpServer {
   );
 
   server.registerTool(
-    "restore_to_bookmark",
+    "list_bookmarks",
     {
-      title: "Restore to Bookmark",
-      description: "Rolls the world back to the most recent bookmark. Returns success and confirmation prose. No parameters.",
+      title: "List Bookmarks",
+      description:
+        "Lists all saved bookmarks by number and description. Call this before restore_to_bookmark so you can tell the player which numbers exist and ask which one to restore to. No parameters.",
       inputSchema: z.object({}),
     },
     async () => {
-      const out = handleRestoreToBookmark(db);
+      const out = handleListBookmarks(db);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  const RestoreToBookmarkSchema = z.object({
+    bookmark_number: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Which bookmark to restore to (1-based number from list_bookmarks). If omitted, the tool returns an error suggesting the caller use list_bookmarks."),
+    confirm: z
+      .boolean()
+      .optional()
+      .describe("Set to true to perform the restore. First call without confirm returns a warning; then call again with confirm: true to proceed."),
+  });
+
+  server.registerTool(
+    "restore_to_bookmark",
+    {
+      title: "Restore to Bookmark",
+      description:
+        "Rolls the world back to a chosen bookmark. You must specify bookmark_number (use list_bookmarks to see numbers). Restoring wipes out all progress and bookmarks after that point. First call returns a confirmation warning; call again with confirm: true to perform the restore. If the player says 'restore' or 'go back' without specifying which bookmark, return an error and suggest they run list_bookmarks and choose a number.",
+      inputSchema: RestoreToBookmarkSchema,
+    },
+    async (args: unknown) => {
+      const parsed = RestoreToBookmarkSchema.safeParse(args ?? {});
+      const data = parsed.success ? parsed.data : {};
+      const bookmarkNumber = data.bookmark_number;
+      const confirm = data.confirm === true;
+      const out = handleRestoreToBookmark(db, bookmarkNumber, confirm);
       return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
     }
   );
