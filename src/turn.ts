@@ -241,10 +241,13 @@ function isMovementCommand(playerCommand: string): boolean {
   return false;
 }
 
+/** Exits have optional label for matching "go through battered door" to the correct exit. */
+type ExitForMovement = { label?: string; target: string; direction?: string };
+
 /** If the player command is a movement (go through door, east, leave, etc.), return the exit target node_id; otherwise null. */
 function resolveMovementTarget(
   playerCommand: string,
-  locationExits: { target: string; direction?: string }[]
+  locationExits: ExitForMovement[]
 ): string | null {
   if (locationExits.length === 0) return null;
   const cmd = playerCommand.trim().toLowerCase();
@@ -258,7 +261,18 @@ function resolveMovementTarget(
   if (generic.some((g) => cmd === g || cmd.startsWith(g + " "))) {
     return locationExits[0].target;
   }
-  if (cmd.startsWith("go through") || cmd.startsWith("through ")) {
+  /* "go through battered door" / "through battered door" → match exit by label so we send player to the right place. */
+  if (cmd.startsWith("go through ") || cmd.startsWith("through ")) {
+    const afterThrough = (cmd.startsWith("go through ") ? cmd.slice("go through ".length) : cmd.slice("through ".length)).trim().replace(/^(the)\s+/i, "");
+    if (afterThrough.length > 0) {
+      const normalizedPhrase = afterThrough.toLowerCase();
+      const match = locationExits.find((e) => {
+        const label = (e.label ?? "").trim().toLowerCase();
+        if (!label) return false;
+        return label === normalizedPhrase || label.includes(normalizedPhrase) || normalizedPhrase.includes(label);
+      });
+      if (match) return match.target;
+    }
     return locationExits[0].target;
   }
   if (cmd === "go" && locationExits.length === 1) return locationExits[0].target;

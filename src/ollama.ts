@@ -273,7 +273,7 @@ function buildSectionE(
       : "";
   const exitLine =
     locationExits.length > 0
-      ? `\nMOVEMENT (required when player moves): If the player's action is to go through the door, go through door, leave, or use a direction ("east", "go west", etc.), you MUST set the player's new_location_id to that exit's target node_id in the player's node_impacts entry. Example: one exit "east -> kitchen" and player says "go through door" → set player new_location_id to "kitchen". Without this field the engine does not move the player. Exits here: ${locationExits.map((e) => `${e.direction ?? "?"} -> ${e.target}`).join("; ")}.\n`
+      ? `\nMOVEMENT (required when player moves): Set the player's new_location_id to the exit's target. If the player gives a direction (e.g. "east", "go north"), use the exit with that direction. If the player names a door (e.g. "go through battered door"), use the exit with that exact label—e.g. battered door -> kitchen, heavy wooden door -> cloister—do NOT use the other door's target. Without this field the engine does not move the player. Exits (label [direction] -> target): ${locationExits.map((e) => `${e.label ?? "?"} [${e.direction ?? "?"}] -> ${e.target}`).join("; ")}.\n`
       : "";
   const destinationLine =
     destinationScene != null
