@@ -107,16 +107,27 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     }
   );
 
+  const BookmarkSchema = z.object({
+    description: z
+      .string()
+      .min(1)
+      .max(120)
+      .describe(
+        "A short, evocative description of this moment (e.g. 'Standing at the scriptorium door, torch in hand' or 'Just after finding the key in the kitchen'). Used to label the restore point so the player can recognise it later."
+      ),
+  });
   server.registerTool(
     "bookmark",
     {
       title: "Bookmark",
       description:
-        "Saves the current world state as a restore point. The bookmark is numbered and given a short description from recent history. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers). No parameters.",
-      inputSchema: z.object({}),
+        "Saves the current world state as a restore point. You must provide a short, evocative description of the moment so the player can recognise this save later (e.g. where they are, what just happened, or what they're about to do). The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
+      inputSchema: BookmarkSchema,
     },
-    async () => {
-      const out = handleBookmark(db);
+    async (args: unknown) => {
+      const parsed = BookmarkSchema.safeParse(args ?? {});
+      const data = parsed.success ? parsed.data : { description: null };
+      const out = handleBookmark(db, { description: data.description ?? null });
       return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
     }
   );

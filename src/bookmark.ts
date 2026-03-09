@@ -9,6 +9,8 @@ import {
   getAllBookmarks,
   getBookmarkByNumber,
   getRecentHistoryForDescription,
+  getPlayer,
+  getNode,
   deleteHistoryAfterEntryId,
   getLatestAdjectivesNewPerNode,
   getDistinctNodeIdsFromLedger,
@@ -17,19 +19,62 @@ import {
   updateWorldGraphAdjectives,
 } from "./db/database.js";
 
-const BOOKMARK_DESCRIPTION_MAX_LEN = 60;
+const BOOKMARK_DESCRIPTION_MAX_LEN = 80;
 
-/** Build a short unique description from recent history (prose_impact or action_description). */
+/** Phrases we treat as uninformative for a bookmark label; use location fallback instead. */
+const UNINFORMATIVE = new Set([
+  "no change.",
+  "nothing happens.",
+  "nothing.",
+  "no change",
+  "nothing happens",
+  "nothing",
+]);
+
+const MOVEMENT_DIRECTIONS = [
+  "north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "up", "down",
+  "n", "s", "e", "w", "ne", "nw", "se", "sw", "u", "d",
+];
+
+function looksLikeMovement(actionDescription: string | null): boolean {
+  if (!actionDescription || !actionDescription.trim()) return false;
+  const cmd = actionDescription.trim().toLowerCase();
+  if (MOVEMENT_DIRECTIONS.some((d) => cmd === d || cmd === "go " + d)) return true;
+  if (cmd.startsWith("go ") || cmd === "leave" || cmd === "exit" || cmd === "go out") return true;
+  if (cmd.startsWith("go through") || cmd.startsWith("through ")) return true;
+  return false;
+}
+
+/** Build a short descriptive phrase for the moment (e.g. "You have just moved into the kitchen" or "You are in the scriptorium"). */
+function buildLocationFallback(db: Database.Database): string {
+  const player = getPlayer(db);
+  if (!player?.location_id) return "Saved point";
+  const loc = getNode(db, player.location_id.trim());
+  if (!loc) return "Saved point";
+  const name = (loc.name ?? loc.node_id ?? "").trim();
+  if (!name) return "Saved point";
+  const recent = getRecentHistoryForDescription(db, 1);
+  const lastAction = recent[0]?.action_description ?? null;
+  const justMoved = looksLikeMovement(lastAction);
+  const withArticle = name.toLowerCase().startsWith("the ") ? name : `the ${name}`;
+  const phrase = justMoved
+    ? `You have just moved into ${withArticle}`
+    : `You are in ${withArticle}`;
+  return phrase.length > BOOKMARK_DESCRIPTION_MAX_LEN ? phrase.slice(0, BOOKMARK_DESCRIPTION_MAX_LEN - 1) + "…" : phrase;
+}
+
+/** Build a short unique description from recent history (prose_impact or action_description), or current location if history is uninformative. */
 function buildBookmarkDescription(db: Database.Database): string {
   const recent = getRecentHistoryForDescription(db, 5);
   for (const e of recent) {
     const text = (e.prose_impact ?? e.action_description ?? "").trim();
     if (text) {
       const oneLine = text.replace(/\s+/g, " ").slice(0, BOOKMARK_DESCRIPTION_MAX_LEN);
-      return oneLine + (oneLine.length >= BOOKMARK_DESCRIPTION_MAX_LEN ? "…" : "");
+      const result = oneLine + (oneLine.length >= BOOKMARK_DESCRIPTION_MAX_LEN ? "…" : "");
+      if (!UNINFORMATIVE.has(result.toLowerCase())) return result;
     }
   }
-  return "Saved point";
+  return buildLocationFallback(db);
 }
 
 export interface BookmarkResult {
@@ -39,11 +84,16 @@ export interface BookmarkResult {
   description: string;
 }
 
-export function createBookmark(db: Database.Database): BookmarkResult {
+export function createBookmark(db: Database.Database, llmDescription?: string | null): BookmarkResult {
   const existing = getAllBookmarks(db);
   const number = existing.length + 1;
-  const fromHistory = buildBookmarkDescription(db);
-  const description = `${number}: ${fromHistory}`;
+  const llmTrimmed = typeof llmDescription === "string" ? llmDescription.trim() : "";
+  const fromLlm = llmTrimmed.length > 0;
+  const raw = fromLlm
+    ? llmTrimmed.replace(/\s+/g, " ").slice(0, BOOKMARK_DESCRIPTION_MAX_LEN)
+    : buildBookmarkDescription(db);
+  const truncated = fromLlm && raw.length >= BOOKMARK_DESCRIPTION_MAX_LEN;
+  const description = `${number}: ${raw}` + (truncated ? "…" : "");
   const entryId = dbBookmark(db, description);
   return {
     prose: "Your progress has been saved.",

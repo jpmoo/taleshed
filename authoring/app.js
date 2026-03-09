@@ -938,11 +938,11 @@
     const zoomOut = document.getElementById("zoom-out");
     const zoomIn = document.getElementById("zoom-in");
     if (zoomIn) zoomIn.addEventListener("click", function () {
-      cameraDistance = Math.min(CAMERA_DIST_MAX, cameraDistance + 15);
+      cameraDistance = Math.max(CAMERA_DIST_MIN, cameraDistance - 15);
       updateCameraPosition();
     });
     if (zoomOut) zoomOut.addEventListener("click", function () {
-      cameraDistance = Math.max(CAMERA_DIST_MIN, cameraDistance - 15);
+      cameraDistance = Math.min(CAMERA_DIST_MAX, cameraDistance + 15);
       updateCameraPosition();
     });
     window.addEventListener("resize", function () {

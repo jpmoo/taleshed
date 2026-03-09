@@ -105,11 +105,16 @@ const OLLAMA_UNREACHABLE_PROSE =
 const MALFORMED_RESPONSE_PROSE =
   "The world flickers uncertainly. (Engine: The story engine could not interpret the outcome. Please try again.)";
 
-/** Normalize direction to lowercase north/south/east/west or empty if not a cardinal. */
+const ALL_EXIT_DIRECTIONS = [
+  "north", "south", "east", "west",
+  "northeast", "northwest", "southeast", "southwest",
+  "up", "down",
+] as const;
+
+/** Normalize direction to lowercase; preserve cardinals, ordinals, up, down; otherwise empty. */
 function normalizeDirection(d: unknown): string {
   const s = (d != null && typeof d === "string" ? d.trim() : "").toLowerCase();
-  if (["north", "south", "east", "west"].includes(s)) return s;
-  return "";
+  return ALL_EXIT_DIRECTIONS.includes(s as (typeof ALL_EXIT_DIRECTIONS)[number]) ? s : "";
 }
 
 /** Parse exits JSON from a location node; returns { label, target, direction? }[]. */

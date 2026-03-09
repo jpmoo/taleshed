@@ -119,8 +119,15 @@ export function handleTakeTurn(db: Database.Database, args: TakeTurnArgs): Promi
   return takeTurnWithRetry(db, args.player_command, args.recent_history ?? "");
 }
 
-export function handleBookmark(db: Database.Database): { prose: string; entry_id: number; number: number; description: string } {
-  return createBookmark(db);
+export interface BookmarkArgs {
+  description?: string | null;
+}
+
+export function handleBookmark(
+  db: Database.Database,
+  args?: BookmarkArgs
+): { prose: string; entry_id: number; number: number; description: string } {
+  return createBookmark(db, args?.description);
 }
 
 export function handleListBookmarks(db: Database.Database): { bookmarks: { number: number; entry_id: number; description: string }[]; prose: string } {
