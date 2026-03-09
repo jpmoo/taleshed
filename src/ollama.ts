@@ -335,6 +335,87 @@ export function assemblePrompt(
   return sections.join("\n\n");
 }
 
+/** Cache: adjective (lowercase) -> whether it is engine-covered (containment/placement/possession). Persists for process lifetime. */
+const engineCoveredCache = new Map<string, boolean>();
+
+/**
+ * Returns true if this adjective's rule describes only containment/placement/possession (where something is, who holds it, or whether a container has contents).
+ * The engine handles those via location_id; such adjectives must not be added to vocabulary or applied to nodes.
+ * Result is cached by adjective (lowercase) so we only call the LLM once per term per process.
+ */
+export async function isEngineCoveredByDefinition(
+  adjective: string,
+  ruleDescription: string
+): Promise<boolean> {
+  const key = String(adjective).trim().toLowerCase();
+  if (!key) return false;
+  const cached = engineCoveredCache.get(key);
+  if (cached !== undefined) {
+    if (DEBUG) debugLog("engine-covered check (cached)", `adjective: ${adjective} -> engine_covered: ${cached}`);
+    return cached;
+  }
+  const rule = String(ruleDescription).trim() || "(no description)";
+  const prompt = `Answer with only YES or NO.
+
+Does the following adjective and its rule describe ONLY (1) where something is located, (2) who possesses or holds it, or (3) whether a container has contents or is empty? The game engine already handles these via location_id and containment, so such adjectives must not be used.
+
+Adjective: ${adjective}
+Rule: ${rule}
+
+Answer:`;
+  try {
+    if (DEBUG) {
+      debugLog("engine-covered check request", `adjective: ${adjective}\nrule: ${rule}`);
+    }
+    const responseText = await callOllama(prompt, "engine-covered check");
+    const raw = (responseText || "").trim().toUpperCase();
+    const yes = raw.startsWith("YES") || raw.includes("YES");
+    engineCoveredCache.set(key, yes);
+    if (DEBUG) {
+      debugLog("engine-covered check result", `adjective: ${adjective}\nraw response: ${responseText || "(empty)"}\nengine_covered: ${yes}`);
+    }
+    return yes;
+  } catch (err) {
+    engineCoveredCache.set(key, false);
+    if (DEBUG) {
+      debugLog("engine-covered check error", `${adjective}: ${err instanceof Error ? err.message : String(err)} -> treating as not covered`);
+    }
+    return false;
+  }
+}
+
+/**
+ * Filter a list of adjectives: remove any that are in vocabulary and whose rule is engine-covered (containment/placement/possession).
+ * Adjectives not in vocabulary are left in (they are gated when we fetch their definition).
+ */
+export async function filterEngineCoveredAdjectives(
+  adjectives: string[],
+  vocabulary: { adjective: string; rule_description: string }[]
+): Promise<string[]> {
+  if (adjectives.length === 0) return [];
+  const vocabByLower = new Map(vocabulary.map((v) => [v.adjective.trim().toLowerCase(), v]));
+  const result: string[] = [];
+  for (const a of adjectives) {
+    const key = String(a).trim().toLowerCase();
+    if (!key) continue;
+    const v = vocabByLower.get(key);
+    if (!v) {
+      result.push(a);
+      continue;
+    }
+    const covered = await isEngineCoveredByDefinition(v.adjective, v.rule_description);
+    if (!covered) result.push(a);
+  }
+  if (DEBUG) {
+    const removed = adjectives.filter((a) => !result.includes(a));
+    debugLog(
+      "filterEngineCoveredAdjectives",
+      `input: [${adjectives.join(", ")}]\noutput: [${result.join(", ")}]${removed.length > 0 ? `\nremoved (engine-covered): [${removed.join(", ")}]` : ""}`
+    );
+  }
+  return result;
+}
+
 export async function callOllama(prompt: string, logLabel?: string): Promise<string> {
   const label = logLabel ? ` (${logLabel})` : "";
   if (DEBUG) {

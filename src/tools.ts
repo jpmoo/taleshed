@@ -12,7 +12,13 @@ import {
   insertVocabulary,
   writeHistoryLedger,
 } from "./db/database.js";
-import { fetchAdjectiveDefinitions, resolveRedundantAdjectives, debugLog } from "./ollama.js";
+import {
+  fetchAdjectiveDefinitions,
+  resolveRedundantAdjectives,
+  isEngineCoveredByDefinition,
+  filterEngineCoveredAdjectives,
+  debugLog,
+} from "./ollama.js";
 
 export interface TakeTurnArgs {
   player_command: string;
@@ -85,6 +91,8 @@ export async function handleUpdateNodeAdjectives(
   const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
   let adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
   const vocabulary = getFullVocabulary(db);
+  /* Strip adjectives that are engine-covered (containment/placement/possession) using definition-based gate. */
+  adjectives = await filterEngineCoveredAdjectives(adjectives, vocabulary);
   /* States are represented by vocabulary terms only. Negations (e.g. unlit, unlocked, "not X") mean "omit the positive term"—strip the negation term and the corresponding positive term from the list. */
   const vocabLower = new Set(vocabulary.map((v) => v.adjective.trim().toLowerCase()).filter(Boolean));
   const toRemove = new Set<string>();
@@ -106,6 +114,22 @@ export async function handleUpdateNodeAdjectives(
   if (candidatesNotInVocab.length > 0) {
     const resolveMap = await resolveRedundantAdjectives(candidatesNotInVocab, vocabulary);
     adjectives = [...new Set(adjectives.map((a) => resolveMap.get(a.toLowerCase()) ?? a))];
+  }
+  /* For adjectives not in vocab, fetch definitions and strip any that are engine-covered before writing to node. */
+  const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
+  let vocabToInsert: { adjective: string; rule_description: string }[] = [];
+  if (missing.length > 0) {
+    const definitionsForMissing = await fetchAdjectiveDefinitions(missing, vocabulary, "update_node_adjectives");
+    const rejectedNew = new Set<string>();
+    for (const d of definitionsForMissing) {
+      if (!d.adjective) continue;
+      const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description || "(No description)");
+      if (covered) rejectedNew.add(d.adjective.trim().toLowerCase());
+      else vocabToInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
+    }
+    if (rejectedNew.size > 0) {
+      adjectives = adjectives.filter((a) => !rejectedNew.has(a.toLowerCase()));
+    }
   }
   const currentAdj = parseAdjectives(node.adjectives);
   const newJson = JSON.stringify(adjectives);
@@ -129,19 +153,12 @@ export async function handleUpdateNodeAdjectives(
       },
     ]);
   })();
-  const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
-  if (missing.length > 0) {
-    debugLog("update_node_adjectives fetching definitions", JSON.stringify({ terms: missing }));
-    const definitions = await fetchAdjectiveDefinitions(missing, vocabulary, "update_node_adjectives");
-    if (definitions.length > 0) {
-      db.transaction(() => {
-        for (const d of definitions) {
-          if (d.adjective) {
-            insertVocabulary(db, d.adjective, d.rule_description || "(No description)", 0);
-          }
-        }
-      })();
-    }
+  if (vocabToInsert.length > 0) {
+    db.transaction(() => {
+      for (const d of vocabToInsert) {
+        insertVocabulary(db, d.adjective, d.rule_description, 0);
+      }
+    })();
   }
   const out: UpdateNodeAdjectivesOutput = { success: true };
   debugLog("update_node_adjectives response", JSON.stringify(out));

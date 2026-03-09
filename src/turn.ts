@@ -28,6 +28,8 @@ import {
   checkOllamaReachable,
   fetchAdjectiveDefinitions,
   resolveRedundantAdjectives,
+  isEngineCoveredByDefinition,
+  filterEngineCoveredAdjectives,
   debugLog,
   type SceneContext,
   type SceneEntity,
@@ -531,6 +533,16 @@ function expandPlayerCommandAbbreviations(playerCommand: string): string {
   return abbrevs[cmd] ?? playerCommand.trim();
 }
 
+/** Build inventory-only prose for "i" / "inventory" short-circuit. Lists only items with location_id player; no LLM. */
+function buildInventoryProse(ctx: SceneContext): string {
+  if (!ctx.inventoryNodeIds.length) {
+    return "You are carrying nothing.";
+  }
+  const items = ctx.inventoryEntities ?? ctx.inventoryNodeIds.map((id) => ({ node_id: id, name: id }));
+  const parts = items.map((e) => (e.name && e.name.trim() ? e.name.trim() : e.node_id));
+  return "You are carrying: " + parts.join(", ") + ".";
+}
+
 function normalizeActionDescription(playerCommand: string): string {
   const t = playerCommand.trim();
   return t.length > 200 ? t.slice(0, 197) + "..." : t;
@@ -572,6 +584,23 @@ export async function takeTurn(
   }
   const destinationScene =
     destTarget != null ? assembleDestinationScene(db, destTarget, ctx.location.node_id) : null;
+
+  /* Inventory short-circuit: never call the LLM for "i" or "inventory". Return only what the player is carrying (location_id: player); no state changes. */
+  const cmdLower = playerCommand.trim().toLowerCase();
+  if (cmdLower === "i" || cmdLower === "inventory") {
+    const inventoryProse = buildInventoryProse(ctx);
+    const scene_node_ids = [
+      ctx.location.node_id,
+      ...ctx.entities.map((e) => e.node_id),
+      ...ctx.inventoryNodeIds,
+      "player",
+    ];
+    return {
+      result: "success",
+      prose: inventoryProse,
+      scene_node_ids,
+    };
+  }
 
   const reachable = await checkOllamaReachable();
   if (!reachable) {
@@ -755,6 +784,34 @@ export async function takeTurn(
     }
   }
 
+  /* Definition-based gate: new adjectives that describe only containment/placement/possession are rejected (not added, not applied). */
+  const stillNotInVocab = new Set<string>();
+  for (const [, entry] of impactByNode) {
+    for (const a of entry.adjectives_new) {
+      const t = String(a).trim().toLowerCase();
+      if (t && !vocabLower.has(t)) stillNotInVocab.add(t);
+    }
+  }
+  if (stillNotInVocab.size > 0) {
+    const defs = await fetchAdjectiveDefinitions([...stillNotInVocab], vocabulary, "turn");
+    const rejectedNew = new Set<string>();
+    for (const d of defs) {
+      if (!d.adjective || !d.rule_description) continue;
+      const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description);
+      if (covered) rejectedNew.add(d.adjective.trim().toLowerCase());
+    }
+    if (rejectedNew.size > 0) {
+      for (const [, entry] of impactByNode) {
+        entry.adjectives_new = entry.adjectives_new.filter(
+          (a) => !rejectedNew.has(String(a).trim().toLowerCase())
+        );
+      }
+    }
+  }
+  for (const [, entry] of impactByNode) {
+    entry.adjectives_new = await filterEngineCoveredAdjectives(entry.adjectives_new, vocabulary);
+  }
+
   const ledgerEntries = Array.from(impactByNode.entries()).map(([node_id, entry]) => ({
     timestamp: now,
     action_description: actionDescription,
@@ -789,7 +846,8 @@ export async function takeTurn(
           na && typeof na === "object" && typeof (na as { rule_description?: unknown }).rule_description === "string"
             ? (na as { rule_description: string }).rule_description.trim()
             : "";
-        newAdjToInsert.push({ adjective: resolved, rule_description: rule || "(No description)" });
+        const covered = await isEngineCoveredByDefinition(resolved, rule || "(No description)");
+        if (!covered) newAdjToInsert.push({ adjective: resolved, rule_description: rule || "(No description)" });
       }
     }
   }
@@ -898,14 +956,20 @@ export async function takeTurn(
   if (missing.length > 0) {
     const definitions = await fetchAdjectiveDefinitions(missing, vocabularyAfter);
     if (definitions.length > 0) {
-      db.transaction(() => {
-        for (const d of definitions) {
-          if (d.adjective) {
-            insertVocabulary(db, d.adjective, d.rule_description || "(No description)", 0);
+      const toInsert: { adjective: string; rule_description: string }[] = [];
+      for (const d of definitions) {
+        if (!d.adjective) continue;
+        const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description || "(No description)");
+        if (!covered) toInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
+      }
+      if (toInsert.length > 0) {
+        db.transaction(() => {
+          for (const d of toInsert) {
+            insertVocabulary(db, d.adjective, d.rule_description, 0);
             console.warn(`[TaleShed] Vocabulary: inserted "${d.adjective}"`);
           }
-        }
-      })();
+        })();
+      }
     }
   }
 
