@@ -72,6 +72,12 @@ function isTakeCommandForObject(playerCommand: string, nodeId: string, entityNam
   return keywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
 }
 
+/** True when the player's command is to drop or put down an object (e.g. "drop torch", "put down the torch"). */
+function isDropCommand(playerCommand: string): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  return /\b(drop|put\s+down|set\s+down|place\s+down)\b/.test(cmd) || /^\s*(drop|put\s+down|set\s+down)\s+/i.test(playerCommand.trim());
+}
+
 /** Remove from narrative any phrase that says the player holds, carries, or took the given object (so returned prose is consistent with stripped object moves). */
 function sanitizeNarrativeStrippedTakes(
   narrative: string,
@@ -567,6 +573,23 @@ export async function takeTurn(
     }
     impactByNode.set(nodeId, entry);
   }
+  /* When the player drops an object but the model omitted it from node_impacts, set the dropped object's new_location_id to the current room so the engine actually moves it. */
+  if (isDropCommand(playerCommand) && ctx.inventoryNodeIds.length > 0) {
+    const cmd = playerCommand.trim().toLowerCase();
+    for (const nid of ctx.inventoryNodeIds) {
+      const entry = impactByNode.get(nid);
+      if (!entry || entry.new_location_id === locationNodeId) continue;
+      const node = getNode(db, nid);
+      const name = node?.name?.trim().toLowerCase().replace(/^(the|a|an)\s+/, "");
+      const fromId = nid.replace(/_?\d*$/, "").toLowerCase();
+      const keywords = fromId.length >= 2 ? [fromId, ...(name ? name.split(/\s+/).filter((w) => w.length >= 2) : [])] : name ? name.split(/\s+/).filter((w) => w.length >= 2) : [];
+      const mentioned = keywords.length > 0 && keywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(cmd));
+      if (mentioned) {
+        entry.new_location_id = locationNodeId;
+        break;
+      }
+    }
+  }
 
   const locationNodeIds = getLocationNodeIds(db);
   for (const [, entry] of impactByNode) {
@@ -620,6 +643,13 @@ export async function takeTurn(
       const node = getNode(db, node_id);
       strippedObjectEntities.push({ node_id, name: node?.name });
     }
+  }
+  /* When the player drops an object (inventory item moving somewhere other than player), the only valid target is the current room. Do not allow the model to put the object into another entity (e.g. hearth_fire). */
+  for (const [node_id, entry] of impactByNode) {
+    if (node_id === "player" || node_id === locationNodeId) continue;
+    if (entry.new_location_id == null || entry.new_location_id === "player") continue;
+    if (!ctx.inventoryNodeIds.includes(node_id)) continue;
+    entry.new_location_id = locationNodeId;
   }
 
   const vocabulary = getFullVocabulary(db);
