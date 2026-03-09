@@ -159,7 +159,7 @@ function sanitizeNarrativeStrippedTakes(
     const kw = e.node_id.replace(/_?\d*$/, "").trim();
     if (kw.length < 2) continue;
     const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const obj = `(?:unlit\\s+)?(?:an?\\s+)?(?:the\\s+)?${esc}`;
+    const obj = `(?:(?:unlit|lit)\\s+)?(?:an?\\s+)?(?:the\\s+)?${esc}`;
     const patterns: RegExp[] = [
       new RegExp(`\\s*${TAKE_NARRATIVE_PHRASE}\\s+${obj}[\\s.]*`, "gi"),
       new RegExp(`,\\s*who\\s+now\\s+holds?\\s+${obj}[\\s.]*`, "gi"),
@@ -757,6 +757,18 @@ export async function takeTurn(
       strippedObjectEntities.push({ node_id, name: node?.name });
     }
   }
+  /* Also sanitize narrative when the model implied a take (prose_impact "Taken by player.") but never set new_location_id, so we did not apply the take—remove "The player now holds the X" from prose. */
+  const narrativeTakeSanitizeEntities = [...strippedObjectEntities];
+  for (const [node_id, entry] of impactByNode) {
+    if (node_id === "player" || node_id === locationNodeId) continue;
+    if (entry.new_location_id === "player") continue;
+    if (String(entry.prose_impact ?? "").trim().toLowerCase() !== "taken by player.") continue;
+    if (narrativeTakeSanitizeEntities.some((e) => e.node_id === node_id)) continue;
+    const entity = ctx.entities.find((e) => e.node_id === node_id);
+    const nodeForName = entity ? undefined : getNode(db, node_id);
+    const name = entity?.name ?? nodeForName?.name;
+    narrativeTakeSanitizeEntities.push({ node_id, name });
+  }
   /* When an inventory object moves somewhere other than player: allow current location (drop), or a container in scene (put X in Y), or an NPC in scene (give X to Y); otherwise force to room or strip. */
   for (const [node_id, entry] of impactByNode) {
     if (node_id === "player" || node_id === locationNodeId) continue;
@@ -996,8 +1008,8 @@ export async function takeTurn(
   }
 
   let prose = mistralResponse.narrative_prose ?? "";
-  if (strippedObjectEntities.length > 0 && prose) {
-    prose = sanitizeNarrativeStrippedTakes(prose, strippedObjectEntities);
+  if (narrativeTakeSanitizeEntities.length > 0 && prose) {
+    prose = sanitizeNarrativeStrippedTakes(prose, narrativeTakeSanitizeEntities);
   }
   /* When dark is active (no light), never show room description — force canonical darkness prose so the model cannot leak detail. */
   if (ctx.darkActive && !(isMovementCommand(playerCommand) && destTarget != null)) {
