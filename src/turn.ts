@@ -189,12 +189,11 @@ function resolveMovementTarget(
   return null;
 }
 
-/** Build destination scene (location + entities + exits) for a location so the prompt can describe arrival. When destination is dark and no light source is present, returns stripped scene (no entities, only exit back to currentLocationId) and darkActive: true. */
+/** Build destination scene (location + entities + exits) for a location so the prompt can describe arrival. When destination is dark and no light source is present, returns stripped scene (no entities, only exit back to currentLocationId) and darkActive: true. Uses current DB state for player inventory so a lit torch etc. correctly negates dark at destination. */
 function assembleDestinationScene(
   db: Database.Database,
   locationId: string,
-  currentLocationId: string | null,
-  playerInventory: WorldNode[]
+  currentLocationId: string | null
 ): DestinationScene | null {
   const location = getNode(db, locationId);
   if (!location || location.node_type !== "location") return null;
@@ -209,7 +208,16 @@ function assembleDestinationScene(
   });
   const locAdjectives = safeParseAdjectives(location.adjectives);
   const destDark = locAdjectives.some((a) => a.toLowerCase() === "dark");
-  const darkAndNotNegated = destDark && !isDarkNegated(playerInventory, inLocation);
+  /* Player brings inventory with them; use current DB so lit torch etc. negates dark at destination. */
+  const playerInventory = getPlayerInventory(db);
+  const negated = isDarkNegated(playerInventory, inLocation);
+  const darkAndNotNegated = destDark && !negated;
+  if (destDark) {
+    debugLog(
+      "dark destination",
+      `${locationId}: negated=${negated} (inventory: ${playerInventory.map((n) => `${n.node_id}[${safeParseAdjectives(n.adjectives).join(",")}]`).join(", ")})`
+    );
+  }
 
   const locationRecent = getRecentHistoryForNode(db, location.node_id, 3)
     .map((h) => sanitizeProseForPrompt(h.prose_impact))
@@ -301,13 +309,16 @@ function safeParseAdjectives(val: string | unknown): string[] {
   }
 }
 
-/** True if a light source is present: a lit object in player inventory, or in the location, or in an open container here. */
+/** True if a light source is present: a lit object in player inventory, or in the location, or in an open container here. Uses node_type and adjectives from world_graph (vocabulary "lit" = provides light in dark locations). */
 function isDarkNegated(
   inventoryNodes: WorldNode[],
   entitiesInLocationNodes: WorldNode[]
 ): boolean {
-  const hasLit = (n: WorldNode) =>
-    n.node_type === "object" && safeParseAdjectives(n.adjectives).some((a) => a.toLowerCase() === "lit");
+  const hasLit = (n: WorldNode) => {
+    if (n.node_type !== "object") return false;
+    const adj = safeParseAdjectives(n.adjectives);
+    return adj.some((a) => String(a).trim().toLowerCase() === "lit");
+  };
   for (const n of inventoryNodes) {
     if (hasLit(n)) return true;
   }
@@ -478,9 +489,7 @@ export async function takeTurn(
     return { result: "failure", prose: "You can't go that way." };
   }
   const destinationScene =
-    destTarget != null
-      ? assembleDestinationScene(db, destTarget, ctx.location.node_id, getPlayerInventory(db))
-      : null;
+    destTarget != null ? assembleDestinationScene(db, destTarget, ctx.location.node_id) : null;
 
   const reachable = await checkOllamaReachable();
   if (!reachable) {

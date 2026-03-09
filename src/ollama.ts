@@ -138,7 +138,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
   return `VOCABULARY (adjectives and their rules):
 ${vocabJson}
 
-When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately.`;
+You MUST apply each adjective's rule_description when deciding what happens. The rules are authoritative—follow what each rule_description says. For example: if a rule says something provides light or illuminates, treat that as a light source where relevant; if it says something blocks passage or interaction until a key or action, treat it as blocking until the condition is met; if it describes an NPC's disposition or limits how they behave, let that guide their behavior; if it describes object or location state (visibility of contents, whether something can perform its function), apply that. Do not rely on the adjective name alone—use the rule_description. When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately.`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
