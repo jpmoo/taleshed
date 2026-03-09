@@ -531,7 +531,8 @@ export async function takeTurn(
   }
 
   const sceneNodeIds = new Set<string>();
-  sceneNodeIds.add(ctx.location.node_id);
+  const locationNodeId = ctx.location.node_id;
+  sceneNodeIds.add(locationNodeId);
   for (const e of ctx.entities) sceneNodeIds.add(e.node_id);
   sceneNodeIds.add("player");
   for (const id of ctx.inventoryNodeIds) sceneNodeIds.add(id);
@@ -617,7 +618,6 @@ export async function takeTurn(
   }
   /* Only allow moving an object to the player when the player's command explicitly took that object (e.g. "take torch"). Block model from putting objects in hand on "apologize", "look", etc. */
   const strippedObjectEntities: { node_id: string; name?: string }[] = [];
-  const locationNodeId = ctx.location.node_id;
   for (const [node_id, entry] of impactByNode) {
     if (node_id === "player" || node_id === locationNodeId) continue;
     if (entry.new_location_id !== "player") continue;
