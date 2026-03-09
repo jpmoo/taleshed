@@ -107,23 +107,22 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     }
   );
 
-  const BookmarkSchema = z.object({
-    description: z
-      .string()
-      .min(1)
-      .max(120)
-      .optional()
-      .describe(
-        "Optional but recommended. A concise, evocative one-line description of what is happening in this moment: where the player is, what they hold, and/or what they just did (e.g. 'Kitchen, fire in the hearth, torch in hand' or 'Scriptorium, Ciaran looks up from his manuscript'). This becomes the bookmark label in list_bookmarks. If omitted, the engine generates a label from recent history."
-      ),
-  });
+  const bookmarkDescriptionParam = z
+    .string()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe(
+      "Optional but recommended. A concise, evocative one-line description of what is happening in this moment: where the player is, what they hold, and/or what they just did (e.g. 'Kitchen, fire in the hearth, torch in hand' or 'Scriptorium, Ciaran looks up from his manuscript'). This becomes the bookmark label in list_bookmarks. If omitted, the engine generates a label from recent history."
+    );
+  const BookmarkSchema = z.object({ description: bookmarkDescriptionParam });
   server.registerTool(
     "bookmark",
     {
       title: "Bookmark",
       description:
         "Saves the current world state as a restore point. When calling this tool, if you can, pass the description parameter with a concise, evocative one-line summary of what's happening in this moment (where the player is, what they hold, what they just did). That label is shown in list_bookmarks and when restoring. If the tool is called without parameters, the engine generates a label from recent history. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
-      inputSchema: BookmarkSchema,
+      inputSchema: { description: bookmarkDescriptionParam },
     },
     async (args: unknown) => {
       const parsed = BookmarkSchema.safeParse(args ?? {});
