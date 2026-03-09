@@ -520,8 +520,9 @@ export async function takeTurn(
   sceneNodeIds.add(ctx.location.node_id);
   for (const e of ctx.entities) sceneNodeIds.add(e.node_id);
   sceneNodeIds.add("player");
+  for (const id of ctx.inventoryNodeIds) sceneNodeIds.add(id);
 
-  /* Only apply impacts for nodes that were in the current scene. Ignore model output for nodes in other locations (e.g. "talk to Ciaran" in kitchen must not update Ciaran). */
+  /* Only apply impacts for nodes that were in the current scene (location, entities here, player, or player inventory). Ignore model output for nodes elsewhere (e.g. "talk to Ciaran" in kitchen must not update Ciaran). */
   const sceneImpactsOnly = mistralResponse.node_impacts.filter((i) => sceneNodeIds.has(i.node_id));
   const actionDescription = normalizeActionDescription(playerCommand);
   const now = new Date().toISOString();
