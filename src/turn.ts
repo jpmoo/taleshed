@@ -189,8 +189,13 @@ function resolveMovementTarget(
   return null;
 }
 
-/** Build destination scene (location + entities + exits) for a location so the prompt can describe arrival. */
-function assembleDestinationScene(db: Database.Database, locationId: string): DestinationScene | null {
+/** Build destination scene (location + entities + exits) for a location so the prompt can describe arrival. When destination is dark and no light source is present, returns stripped scene (no entities, only exit back to currentLocationId) and darkActive: true. */
+function assembleDestinationScene(
+  db: Database.Database,
+  locationId: string,
+  currentLocationId: string | null,
+  playerInventory: WorldNode[]
+): DestinationScene | null {
   const location = getNode(db, locationId);
   if (!location || location.node_type !== "location") return null;
   const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
@@ -202,6 +207,28 @@ function assembleDestinationScene(db: Database.Database, locationId: string): De
     if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
     return true;
   });
+  const locAdjectives = safeParseAdjectives(location.adjectives);
+  const destDark = locAdjectives.some((a) => a.toLowerCase() === "dark");
+  const darkAndNotNegated = destDark && !isDarkNegated(playerInventory, inLocation);
+
+  const locationRecent = getRecentHistoryForNode(db, location.node_id, 3)
+    .map((h) => sanitizeProseForPrompt(h.prose_impact))
+    .filter(Boolean);
+  const locationEntity = toSceneEntity(location, locationRecent);
+
+  let entities: SceneEntity[];
+  let exits = safeParseExits((location as WorldNode & { exits?: string }).exits);
+  if (darkAndNotNegated) {
+    entities = [];
+    if (currentLocationId != null) {
+      const entranceOnly = exits.filter((e) => e.target === currentLocationId);
+      exits = entranceOnly.length > 0 ? entranceOnly : exits;
+    } else {
+      exits = [];
+    }
+    return { location: locationEntity, entities, exits, darkActive: true };
+  }
+
   const entityOrder: Record<string, number> = { location: 0, npc: 1, object: 2, player: 3 };
   const rawEntities: SceneEntity[] = inLocation.map((node) => {
     const recent = getRecentHistoryForNode(db, node.node_id, 3)
@@ -209,17 +236,20 @@ function assembleDestinationScene(db: Database.Database, locationId: string): De
       .filter(Boolean);
     return toSceneEntity(node, recent);
   });
-  const entities = rawEntities.sort(
+  entities = rawEntities.sort(
     (a, b) =>
       (entityOrder[a.node_type] ?? 2) - (entityOrder[b.node_type] ?? 2) ||
       a.node_id.localeCompare(b.node_id)
   );
-  const locationRecent = getRecentHistoryForNode(db, location.node_id, 3)
-    .map((h) => sanitizeProseForPrompt(h.prose_impact))
-    .filter(Boolean);
-  const locationEntity = toSceneEntity(location, locationRecent);
-  const exits = safeParseExits((location as WorldNode & { exits?: string }).exits);
   return { location: locationEntity, entities, exits };
+}
+
+/** Canonical prose when the scene is dark (no light): player sees nothing except the listed exit(s). Used so we never show room detail when dark is active. */
+function buildDarkProse(exits: { direction?: string; target: string }[]): string {
+  const base = "Impenetrable darkness. You can see nothing.";
+  if (exits.length === 0) return base + ".";
+  const parts = exits.map((e) => `${e.direction ?? "?"} to ${e.target}`).filter(Boolean);
+  return parts.length === 0 ? base + "." : `${base}\n\nExits: ${parts.join("; ")}.`;
 }
 
 /** Ensure narrative mentions every exit so the player can see them (e.g. down to cellar). If any exit's destination is missing from prose, append an Exits line. */
@@ -448,7 +478,9 @@ export async function takeTurn(
     return { result: "failure", prose: "You can't go that way." };
   }
   const destinationScene =
-    destTarget != null ? assembleDestinationScene(db, destTarget) : null;
+    destTarget != null
+      ? assembleDestinationScene(db, destTarget, ctx.location.node_id, getPlayerInventory(db))
+      : null;
 
   const reachable = await checkOllamaReachable();
   if (!reachable) {
@@ -731,8 +763,13 @@ export async function takeTurn(
   if (strippedObjectEntities.length > 0 && prose) {
     prose = sanitizeNarrativeStrippedTakes(prose, strippedObjectEntities);
   }
-  /* When the player stayed in the current location (look, take, etc.), ensure every exit is mentioned so they always see e.g. "down to cellar". */
-  if (!(isMovementCommand(playerCommand) && destTarget != null)) {
+  /* When dark is active (no light), never show room description — force canonical darkness prose so the model cannot leak detail. */
+  if (ctx.darkActive && !(isMovementCommand(playerCommand) && destTarget != null)) {
+    prose = buildDarkProse(ctx.locationExits ?? []);
+  } else if (isMovementCommand(playerCommand) && destTarget != null && destinationScene?.darkActive) {
+    prose = buildDarkProse(destinationScene.exits);
+  } else if (!(isMovementCommand(playerCommand) && destTarget != null)) {
+    /* When the player stayed in the current location (look, take, etc.), ensure every exit is mentioned so they always see e.g. "down to cellar". */
     prose = ensureExitsInProse(prose, ctx.locationExits ?? []);
   }
 

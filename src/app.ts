@@ -112,8 +112,9 @@ export function createTaleshedServer(db: Database.Database): McpServer {
       .string()
       .min(1)
       .max(120)
+      .optional()
       .describe(
-        "A short, evocative description of this moment (e.g. 'Standing at the scriptorium door, torch in hand' or 'Just after finding the key in the kitchen'). Used to label the restore point so the player can recognise it later."
+        "Recommended. One short line for this moment so the player can recognise the save later. Include: where they are, and/or what they hold or just did (e.g. 'Kitchen, back from cellar, unlit torch in hand, fire in the hearth' or 'Scriptorium, just before speaking to Ciaran'). If your client cannot send parameters, omit and the engine will generate a label."
       ),
   });
   server.registerTool(
@@ -121,13 +122,14 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Bookmark",
       description:
-        "Saves the current world state as a restore point. You must provide a short, evocative description of the moment so the player can recognise this save later (e.g. where they are, what just happened, or what they're about to do). The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
+        "Saves the current world state as a restore point. When calling this tool, provide a description: one short line summarizing the moment — where the player is, what they hold, and/or what they just did (e.g. 'Kitchen, back from cellar, unlit torch in hand' or 'Scriptorium, torch in bracket'). That label is shown in list_bookmarks and when restoring. If the tool is called without parameters, the engine generates a label. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
       inputSchema: BookmarkSchema,
     },
     async (args: unknown) => {
       const parsed = BookmarkSchema.safeParse(args ?? {});
-      const data = parsed.success ? parsed.data : { description: null };
-      const out = handleBookmark(db, { description: data.description ?? null });
+      const data = parsed.success ? parsed.data : { description: undefined };
+      const desc = typeof data?.description === "string" && data.description.trim() ? data.description.trim() : null;
+      const out = handleBookmark(db, { description: desc });
       return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
     }
   );

@@ -63,6 +63,8 @@ export interface DestinationScene {
   location: SceneEntity;
   entities: SceneEntity[];
   exits: LocationExit[];
+  /** When true, destination is dark with no light; prompt must describe only darkness and the single exit (way back). */
+  darkActive?: boolean;
 }
 
 export interface MistralNodeImpact {
@@ -203,6 +205,15 @@ Check: does the recent narration describe anything inconsistent with the current
 }
 
 function buildSectionDestination(dest: DestinationScene): string {
+  if (dest.darkActive) {
+    let out = `DESTINATION is DARK (no light source). The player will see only impenetrable darkness and the single exit they came by.
+You MUST describe ONLY: (1) briefly leaving the current location; (2) impenetrable darkness — they can see nothing; (3) the one visible exit (the way back). Do NOT describe the room, any objects, any other exits, or any detail that would require light to see.
+`;
+    if (dest.exits.length > 0) {
+      out += `The only visible exit: ${dest.exits.map((e) => `${e.direction ?? "?"} to ${e.target}`).join("; ")}\n`;
+    }
+    return out;
+  }
   let out = `DESTINATION (the player is moving here — you MUST describe this in narrative_prose after they leave):
 Location: ${dest.location.node_id} — ${dest.location.name}
 Description: ${dest.location.base_description}
