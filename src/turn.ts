@@ -58,6 +58,19 @@ export const TAKE_NARRATIVE_PHRASE = "The player now holds the";
 /** Standard prose_impact for a taken object's node_impacts entry. Use this exact string so logs are easy to scan. */
 export const TAKE_PROSE_IMPACT = "Taken by player.";
 
+/** Adjectives that represent object/location state changes (lit, open, locked, etc.). When the player only takes an object (no "light", "use", "open", etc.), we do not allow the model to add these to the taken object. */
+const STATE_CHANGE_ADJECTIVES = new Set(
+  ["lit", "open", "closed", "locked", "sealed"].map((a) => a.toLowerCase())
+);
+
+/** True if the player's command includes a take verb but no state-changing verb (light, use, open, unlock, etc.). Used so we do not apply state changes (e.g. "lit") to an object when the player only said "take X". */
+function isTakeOnlyCommand(playerCommand: string): boolean {
+  const cmd = playerCommand.trim();
+  const takeVerb = /\b(take|get|grab|pick\s+up|carry)\b/i.test(cmd);
+  const stateChangeVerb = /\b(light|use|unlock|activate|ignite|extinguish|open|close|lock)\b/i.test(cmd);
+  return takeVerb && !stateChangeVerb;
+}
+
 /** True only when the player's command explicitly takes this object (e.g. "take torch", "get the torch"). Used to block model from moving objects to player when the player said something else. */
 function isTakeCommandForObject(playerCommand: string, nodeId: string, entityName?: string): boolean {
   const cmd = playerCommand.trim().toLowerCase();
@@ -759,6 +772,32 @@ export async function takeTurn(
       entry.new_location_id = undefined;
       const node = getNode(db, node_id);
       strippedObjectEntities.push({ node_id, name: node?.name });
+    }
+  }
+  /* When the player explicitly took an object (e.g. "take torch", "get key") but the model omitted new_location_id for it, force the take so the object moves to inventory. Applies to any item in the scene (room or container). */
+  for (const entity of ctx.entities) {
+    if (entity.node_type !== "object") continue;
+    if (!isTakeCommandForObject(playerCommand, entity.node_id, entity.name)) continue;
+    const entry = impactByNode.get(entity.node_id);
+    if (!entry || entry.new_location_id === "player") continue;
+    entry.new_location_id = "player";
+  }
+  /* When the player only took an object (no "light", "use", "open", etc.), do not allow state-change adjectives (lit, open, locked, etc.) on the taken object—keep its previous state. Applies to any taken item, not just torches/lights. */
+  if (isTakeOnlyCommand(playerCommand)) {
+    for (const [node_id, entry] of impactByNode) {
+      if (node_id === "player" || node_id === locationNodeId) continue;
+      if (entry.new_location_id !== "player") continue;
+      const stateChangeOnly = entry.adjectives_new.every((a) => STATE_CHANGE_ADJECTIVES.has(String(a).trim().toLowerCase()));
+      const hadNewStateChange = entry.adjectives_new.some((a) => STATE_CHANGE_ADJECTIVES.has(String(a).trim().toLowerCase()));
+      if (hadNewStateChange) {
+        if (stateChangeOnly) {
+          entry.adjectives_new = [...entry.adjectives_old];
+        } else {
+          entry.adjectives_new = entry.adjectives_new.filter(
+            (a) => !STATE_CHANGE_ADJECTIVES.has(String(a).trim().toLowerCase())
+          );
+        }
+      }
     }
   }
   /* Also sanitize narrative when the model implied a take (prose_impact "Taken by player.") but never set new_location_id, so we did not apply the take—remove "The player now holds the X" from prose. */
