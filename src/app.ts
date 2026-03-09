@@ -45,7 +45,7 @@ const TakeTurnSchema = z.object({
 });
 
 const UpdateNodeAdjectivesSchema = z.object({
-  node_id: z.string().describe("The node_id of the entity to update (e.g. 'ciaran', 'player'). Must exist in the world."),
+  node_id: z.string().describe("Exact node_id of the entity (use IDs from take_turn's scene_node_ids or the scene: e.g. torch_01, bracket_01, ciaran, kitchen, player). Objects often have a numeric suffix (_01); use that, not the display name."),
   adjectives: z
     .array(z.string())
     .describe("Full list of adjectives that now describe this entity. Replace the previous set; new terms get definitions automatically."),
@@ -62,7 +62,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Take Turn",
       description:
-        "The core game loop. Pass the player's command exactly as the player typed it. You may send compound commands as one phrase (e.g. 'take the torch and go through the door') or as separate take_turn calls (e.g. 'take torch', then 'go through door', then 'east'); the engine handles both. Each single command (e.g. 'go through door', 'east') must be processed correctly. When available, pass recent_history (or suggested_recent_history from the previous response). Returns result, prose for narration, and suggested_recent_history. When presenting the engine's prose to the player: be verbose.",
+        "The core game loop. Pass the player's command exactly as the player typed it. You may send compound commands as one phrase (e.g. 'take the torch and go through the door') or as separate take_turn calls (e.g. 'take torch', then 'go through door', then 'east'); the engine handles both. When available, pass recent_history (or suggested_recent_history from the previous response). Returns result, prose, suggested_recent_history, and scene_node_ids (exact entity IDs for this scene—use these for update_node_adjectives, e.g. torch_01, ciaran). When presenting the engine's prose to the player: be verbose.",
       inputSchema: TakeTurnSchema,
     },
     async (args: unknown) => {
@@ -183,7 +183,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Update Node Adjectives",
       description:
-        "When your narration implies a state or disposition change for an NPC or entity (e.g. Ciaran becomes less guarded, a room feels tense), call this to sync the engine so future turns see the updated state. Pass the node_id (e.g. 'ciaran') and the full list of adjectives that now describe that entity. New adjectives get definitions automatically. Use after presenting prose where you expanded with disposition or atmosphere changes.",
+        "When your narration implies a state or disposition change for an NPC or entity (e.g. Ciaran becomes less guarded, torch extinguished), call this to sync the engine so future turns see the updated state. Use the exact node_id from the last take_turn response's scene_node_ids (e.g. torch_01, ciaran, player)—not display names like 'torch'. Pass the full list of adjectives that now describe that entity. New adjectives get definitions automatically.",
       inputSchema: UpdateNodeAdjectivesSchema,
     },
     async (args: unknown) => {

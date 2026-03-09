@@ -24,6 +24,8 @@ export interface TakeTurnOutput {
   prose: string;
   error?: string;
   reconciliation_notes?: string | null;
+  /** Node IDs in the scene this turn (location, entities present, inventory, player). Use these exact IDs for update_node_adjectives. */
+  scene_node_ids?: string[];
 }
 
 export interface UpdateNodeAdjectivesArgs {
@@ -53,15 +55,30 @@ export async function handleUpdateNodeAdjectives(
   args: UpdateNodeAdjectivesArgs
 ): Promise<UpdateNodeAdjectivesOutput> {
   debugLog("update_node_adjectives request", JSON.stringify(args, null, 2));
-  const nodeId = (args.node_id ?? "").trim();
-  if (!nodeId) {
+  const nodeIdRaw = (args.node_id ?? "").trim();
+  if (!nodeIdRaw) {
     const out: UpdateNodeAdjectivesOutput = { success: false, error: "node_id is required" };
     debugLog("update_node_adjectives response", JSON.stringify(out));
     return out;
   }
-  const node = getNode(db, nodeId);
+  let node = getNode(db, nodeIdRaw);
+  let nodeId = nodeIdRaw;
   if (!node) {
-    const out: UpdateNodeAdjectivesOutput = { success: false, error: `No active node with node_id "${nodeId}"` };
+    for (const suffix of ["_01", "_1"]) {
+      const candidate = nodeIdRaw + suffix;
+      const n = getNode(db, candidate);
+      if (n) {
+        node = n;
+        nodeId = candidate;
+        break;
+      }
+    }
+  }
+  if (!node) {
+    const out: UpdateNodeAdjectivesOutput = {
+      success: false,
+      error: `No active node with node_id "${nodeIdRaw}". Use the exact node_id from the scene (e.g. torch_01, not "torch").`,
+    };
     debugLog("update_node_adjectives response", JSON.stringify(out));
     return out;
   }

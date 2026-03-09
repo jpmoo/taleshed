@@ -476,6 +476,8 @@ export interface TakeTurnResult {
   error?: string;
   /** If the model reported inconsistencies (e.g. narrative described a state change not reflected in adjectives_new). */
   reconciliation_notes?: string | null;
+  /** Node IDs in the scene this turn (location, entities present, inventory, player). For use with update_node_adjectives. */
+  scene_node_ids?: string[];
 }
 
 export async function takeTurn(
@@ -738,9 +740,8 @@ export async function takeTurn(
           const modelAcknowledgedCurrent =
             entry.adjectives_old.length > 0 &&
             JSON.stringify(entry.adjectives_old) === currentJson;
-          /* Never overwrite inventory item adjectives with empty when the node has state (e.g. lit torch). */
-          const isInventory = ctx.inventoryNodeIds.includes(node_id);
-          if (modelReturnedEmpty && nodeHadAdjectives && (isInventory || !modelAcknowledgedCurrent)) {
+          /* Only preserve (skip overwrite) when the model returned empty but did NOT acknowledge current state—i.e. we assume they forgot. If they acknowledged current and set adjectives_new to [], that is an intentional clear (e.g. extinguish) and we apply it. */
+          if (modelReturnedEmpty && nodeHadAdjectives && !modelAcknowledgedCurrent) {
             continue;
           }
           updateWorldGraphAdjectives(db, node_id, newJson);
@@ -840,10 +841,17 @@ export async function takeTurn(
     prose = ensureExitsInProse(prose, ctx.locationExits ?? []);
   }
 
+  const scene_node_ids = [
+    ctx.location.node_id,
+    ...ctx.entities.map((e) => e.node_id),
+    ...ctx.inventoryNodeIds,
+    "player",
+  ];
   return {
     result: mistralResponse.action_result,
     prose,
     reconciliation_notes: mistralResponse.reconciliation_notes ?? null,
+    scene_node_ids,
   };
 }
 
