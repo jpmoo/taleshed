@@ -106,7 +106,7 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - When the player goes through an exit (e.g. "go through the door", "east", "go north", "leave"), goes back, returns, or goes to a named place (e.g. "go back to scriptorium", "go west"), you MUST include in node_impacts an entry for node_id "player" with new_location_id set to the destination's node_id (from EXITS: e.g. kitchen, scriptorium). Use the exact target node_id from EXITS (e.g. kitchen), not a phrase like "the kitchen" or "The Kitchen"—the engine only accepts node_ids that exist. If the player says a direction (e.g. "east", "go north"), use the exit that has that direction. Compound commands (e.g. "take torch and go through door") require every part to be applied: do the take AND set the player's new_location_id to the exit target so the engine actually moves them. Otherwise the engine will not move the player.
 - In narrative_prose, describe EVERY exit in EXITS FROM THIS LOCATION (direction and destination) so the player can move. The location Description may mention doors in passing (e.g. "a battered door leads out"); the authoritative source for which door goes which direction and where is EXITS FROM THIS LOCATION—use only the exit list for directions and destinations, not the room description. Each exit line is "label [direction] -> target": use that exact pairing. For example, if the list has "battered door [east] -> kitchen" and "heavy wooden door braced in iron [north] -> cloister", then the battered door leads east to the kitchen and the heavy door leads north to the cloister—do not swap labels with directions (e.g. do not say the battered door leads north). You MUST mention each one—never say "no exits" or "no obvious exits" if the list has exits. Describe every exit in the list, including exits with direction \"up\" or \"down\" (e.g. steps down to the cellar); do not omit an exit because the destination might be dark or because it is a vertical direction. When the current room is not dark, all listed exits are visible and must be described. Mention only the listed exits—no extra doors or directions.
 - You MUST return node_impacts with one entry for the location, each entity in ENTITIES PRESENT, each item in Inventory (see PLAYER/Inventory—preserve adjectives unless this turn changes them), and the player. Use the exact node_id from CURRENT SCENE: the location's node_id (e.g. scriptorium), each entity's node_id (e.g. ciaran, torch_01), each inventory node_id, and "player". Do not use "location", "entities|name", or the character's name—only the exact node_id shown. The engine ignores any node_id that does not match; wrong node_ids mean state (e.g. Ciaran's adjectives) will never update. For each entry set adjectives_old to that node's current adjectives and adjectives_new to the state after this turn. Never omit an entry or leave adjectives blank for a node that has adjectives.
-- adjectives_old and adjectives_new must contain ONLY qualities that affect how the node interacts with the player and the world (e.g. disposition: guarded, less guarded, hostile; state: lit, closed, locked). Never use a location name (e.g. scriptorium, kitchen, cloister) as an adjective—adjectives are qualities like guarded or lit, not places. Do NOT put one-off narrative observations in adjectives (e.g. "noticed looking up from his manuscript", "observed as he worked")—those belong in prose_impact only. If the only change is a momentary action (looked up, nodded), keep adjectives_new equal to adjectives_old.
+- adjectives_old and adjectives_new must contain ONLY persistent, game-affecting qualities (disposition: guarded, hostile; object/location state: lit, closed, locked). Never use a location name as an adjective. FORBIDDEN in adjectives_new: momentary actions, one-off observations, or transient states (e.g. "noticed looking up", "looking up", "observed", "currently observing", "engrossed in work", "noticed the player")—put these in prose_impact only. Adjectives must be from VOCABULARY and must describe how the node persistently interacts with the player or world; if the only change is a momentary action (looked up, nodded), keep adjectives_new equal to adjectives_old. Do not invent new adjective phrases—use only existing vocabulary terms.
 - When your narrative explicitly describes a change in an NPC's disposition or attitude (e.g. they warm up, smile, become less guarded, show trust, relax), you MUST set that NPC's adjectives_new to reflect that state. If you describe them as no longer guarded, remove "guarded" from adjectives_new or add an appropriate term; if you describe them as pleased or open, add or adjust adjectives accordingly. The engine only persists what you put in adjectives_new—so if your prose says Ciaran "allows himself a faint smile" and "is genuinely pleased" but you leave adjectives_new as ["guarded"], the next turn will still show him as guarded. adjectives_new must match the state your narrative describes. For entering, looking, or movement-only commands (no interaction with an NPC or object), keep adjectives_new equal to adjectives_old for all nodes.
 - You may add atmospheric room detail (shelves, curtain, bench, etc.) as scenery for color. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Useful flame or fire (anything that can light another object or be taken/used) must never exist only in scenery or in a location's description. Candles, lanterns, braziers, etc. mentioned only in room text are never sufficient to light something or to take and use; only objects listed in ENTITIES PRESENT (e.g. a fire object in the room, a torch) can be used that way.
 
@@ -300,7 +300,7 @@ PUT IN CONTAINER: When the player puts an object into a container (e.g. "put the
 GIVE TO NPC: NPCs do not take the player's items unless the player explicitly gives (e.g. "give carrot to Ciaran"). If the player only offers or mentions the item, do NOT set that object's new_location_id to the NPC; the item stays in inventory.
 Reminder: Literal actions only; offers/questions do not perform the action; objects do not change state on their own or when taken.
 ${exitLine}${destinationLine}
-CRITICAL — node_impacts: ONE entry for the location, each entity in ENTITIES PRESENT, each item in Inventory (see Inventory line above—preserve each item's adjectives unless this turn changes them), and the player (no other node_ids). If the player targeted someone/something not present, action fails but node_impacts still lists location, ENTITIES PRESENT, Inventory items, player. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only game-relevant qualities (disposition, lit/closed)—not narrative moments like "noticed looking up" (use prose_impact). When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
+CRITICAL — node_impacts: ONE entry for the location, each entity in ENTITIES PRESENT, each item in Inventory (see Inventory line above—preserve each item's adjectives unless this turn changes them), and the player (no other node_ids). If the player targeted someone/something not present, action fails but node_impacts still lists location, ENTITIES PRESENT, Inventory items, player. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only vocabulary terms for persistent state (disposition, lit/closed). Never add transient or narrative-only phrases (e.g. "noticed looking up", "observed")—use prose_impact for those. When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
 
 Return ONLY this JSON structure:
 {
@@ -357,7 +357,7 @@ export async function isEngineCoveredByDefinition(
   const rule = String(ruleDescription).trim() || "(no description)";
   const prompt = `Answer with only YES or NO.
 
-Does the following adjective and its rule describe ONLY (1) where something is located, (2) who possesses or holds it, or (3) whether a container has contents or is empty? The game engine already handles these via location_id and containment, so such adjectives must not be used.
+Does the following adjective and its rule describe ONLY (1) where something is located, (2) who possesses or holds it, or (3) whether a container has contents or is empty? The game engine already handles (1)–(3) via location_id and containment, so such adjectives must not be used. Do NOT treat "open" or "closed" as engine-covered—those are valid state adjectives (container open vs closed), not descriptions of whether the container has contents.
 
 Adjective: ${adjective}
 Rule: ${rule}
@@ -411,6 +411,80 @@ export async function filterEngineCoveredAdjectives(
     debugLog(
       "filterEngineCoveredAdjectives",
       `input: [${adjectives.join(", ")}]\noutput: [${result.join(", ")}]${removed.length > 0 ? `\nremoved (engine-covered): [${removed.join(", ")}]` : ""}`
+    );
+  }
+  return result;
+}
+
+/** Cache: adjective (lowercase) -> whether it is transient/narrative-only (momentary action or observation, not persistent game state). */
+const transientAdjectiveCache = new Map<string, boolean>();
+
+/**
+ * Returns true if this adjective's rule describes only a momentary action, one-off observation, or transient state
+ * that does not persistently affect how the node interacts with the player or world. Such terms must not be added
+ * to vocabulary or applied to nodes—use prose_impact instead. Result is cached by adjective (lowercase).
+ */
+export async function isTransientOrNarrativeOnlyByDefinition(
+  adjective: string,
+  ruleDescription: string
+): Promise<boolean> {
+  const key = String(adjective).trim().toLowerCase();
+  if (!key) return false;
+  const cached = transientAdjectiveCache.get(key);
+  if (cached !== undefined) {
+    if (DEBUG) debugLog("transient-adjective check (cached)", `adjective: ${adjective} -> transient: ${cached}`);
+    return cached;
+  }
+  const rule = String(ruleDescription).trim() || "(no description)";
+  const prompt = `Answer with only YES or NO.
+
+Does the following adjective and its rule describe ONLY a momentary action, one-off observation, or transient state (e.g. "looked up", "noticed", "currently observing", "observed doing X") that does NOT persistently affect how the node interacts with the player or the world? Persistent game state = disposition (guarded, hostile), object state (lit, closed, locked), or other qualities that last and affect future turns. If the term is only a fleeting moment or observation, answer YES—such terms must not be used as adjectives; put them in prose_impact only.
+
+Adjective: ${adjective}
+Rule: ${rule}
+
+Answer:`;
+  try {
+    if (DEBUG) debugLog("transient-adjective check request", `adjective: ${adjective}\nrule: ${rule}`);
+    const responseText = await callOllama(prompt, "transient-adjective check");
+    const raw = (responseText || "").trim().toUpperCase();
+    const yes = raw.startsWith("YES") || raw.includes("YES");
+    transientAdjectiveCache.set(key, yes);
+    if (DEBUG) debugLog("transient-adjective check result", `adjective: ${adjective}\nraw: ${responseText || "(empty)"}\ntransient: ${yes}`);
+    return yes;
+  } catch (err) {
+    transientAdjectiveCache.set(key, false);
+    if (DEBUG) debugLog("transient-adjective check error", `${adjective}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
+    return false;
+  }
+}
+
+/**
+ * Filter adjectives: remove any that are in vocabulary and whose rule is transient/narrative-only (momentary action or observation).
+ */
+export async function filterTransientAdjectives(
+  adjectives: string[],
+  vocabulary: { adjective: string; rule_description: string }[]
+): Promise<string[]> {
+  if (adjectives.length === 0) return [];
+  const vocabByLower = new Map(vocabulary.map((v) => [v.adjective.trim().toLowerCase(), v]));
+  const result: string[] = [];
+  for (const a of adjectives) {
+    const key = String(a).trim().toLowerCase();
+    if (!key) continue;
+    const v = vocabByLower.get(key);
+    if (!v) {
+      result.push(a);
+      continue;
+    }
+    const transient = await isTransientOrNarrativeOnlyByDefinition(v.adjective, v.rule_description);
+    if (!transient) result.push(a);
+  }
+  if (DEBUG) {
+    const removed = adjectives.filter((a) => !result.includes(a));
+    debugLog(
+      "filterTransientAdjectives",
+      `input: [${adjectives.join(", ")}]\noutput: [${result.join(", ")}]${removed.length > 0 ? `\nremoved (transient/narrative-only): [${removed.join(", ")}]` : ""}`
     );
   }
   return result;

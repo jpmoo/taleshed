@@ -30,6 +30,8 @@ import {
   resolveRedundantAdjectives,
   isEngineCoveredByDefinition,
   filterEngineCoveredAdjectives,
+  isTransientOrNarrativeOnlyByDefinition,
+  filterTransientAdjectives,
   debugLog,
   type SceneContext,
   type SceneEntity,
@@ -797,8 +799,11 @@ export async function takeTurn(
     const rejectedNew = new Set<string>();
     for (const d of defs) {
       if (!d.adjective || !d.rule_description) continue;
+      const key = d.adjective.trim().toLowerCase();
       const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description);
-      if (covered) rejectedNew.add(d.adjective.trim().toLowerCase());
+      if (covered) rejectedNew.add(key);
+      const transient = await isTransientOrNarrativeOnlyByDefinition(d.adjective, d.rule_description);
+      if (transient) rejectedNew.add(key);
     }
     if (rejectedNew.size > 0) {
       for (const [, entry] of impactByNode) {
@@ -810,6 +815,7 @@ export async function takeTurn(
   }
   for (const [, entry] of impactByNode) {
     entry.adjectives_new = await filterEngineCoveredAdjectives(entry.adjectives_new, vocabulary);
+    entry.adjectives_new = await filterTransientAdjectives(entry.adjectives_new, vocabulary);
   }
 
   const ledgerEntries = Array.from(impactByNode.entries()).map(([node_id, entry]) => ({
@@ -847,7 +853,8 @@ export async function takeTurn(
             ? (na as { rule_description: string }).rule_description.trim()
             : "";
         const covered = await isEngineCoveredByDefinition(resolved, rule || "(No description)");
-        if (!covered) newAdjToInsert.push({ adjective: resolved, rule_description: rule || "(No description)" });
+        const transient = await isTransientOrNarrativeOnlyByDefinition(resolved, rule || "(No description)");
+        if (!covered && !transient) newAdjToInsert.push({ adjective: resolved, rule_description: rule || "(No description)" });
       }
     }
   }
@@ -960,7 +967,8 @@ export async function takeTurn(
       for (const d of definitions) {
         if (!d.adjective) continue;
         const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description || "(No description)");
-        if (!covered) toInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
+        const transient = await isTransientOrNarrativeOnlyByDefinition(d.adjective, d.rule_description || "(No description)");
+        if (!covered && !transient) toInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
       }
       if (toInsert.length > 0) {
         db.transaction(() => {

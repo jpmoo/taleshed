@@ -17,6 +17,8 @@ import {
   resolveRedundantAdjectives,
   isEngineCoveredByDefinition,
   filterEngineCoveredAdjectives,
+  isTransientOrNarrativeOnlyByDefinition,
+  filterTransientAdjectives,
   debugLog,
 } from "./ollama.js";
 
@@ -91,8 +93,9 @@ export async function handleUpdateNodeAdjectives(
   const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
   let adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
   const vocabulary = getFullVocabulary(db);
-  /* Strip adjectives that are engine-covered (containment/placement/possession) using definition-based gate. */
+  /* Strip adjectives that are engine-covered (containment/placement/possession) or transient/narrative-only. */
   adjectives = await filterEngineCoveredAdjectives(adjectives, vocabulary);
+  adjectives = await filterTransientAdjectives(adjectives, vocabulary);
   /* States are represented by vocabulary terms only. Negations (e.g. unlit, unlocked, "not X") mean "omit the positive term"—strip the negation term and the corresponding positive term from the list. */
   const vocabLower = new Set(vocabulary.map((v) => v.adjective.trim().toLowerCase()).filter(Boolean));
   const toRemove = new Set<string>();
@@ -123,9 +126,12 @@ export async function handleUpdateNodeAdjectives(
     const rejectedNew = new Set<string>();
     for (const d of definitionsForMissing) {
       if (!d.adjective) continue;
+      const key = d.adjective.trim().toLowerCase();
       const covered = await isEngineCoveredByDefinition(d.adjective, d.rule_description || "(No description)");
-      if (covered) rejectedNew.add(d.adjective.trim().toLowerCase());
-      else vocabToInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
+      if (covered) rejectedNew.add(key);
+      const transient = await isTransientOrNarrativeOnlyByDefinition(d.adjective, d.rule_description || "(No description)");
+      if (transient) rejectedNew.add(key);
+      if (!covered && !transient) vocabToInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
     }
     if (rejectedNew.size > 0) {
       adjectives = adjectives.filter((a) => !rejectedNew.has(a.toLowerCase()));
