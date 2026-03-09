@@ -114,7 +114,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
       .max(120)
       .optional()
       .describe(
-        "Recommended. One short line for this moment so the player can recognise the save later. Include: where they are, and/or what they hold or just did (e.g. 'Kitchen, back from cellar, unlit torch in hand, fire in the hearth' or 'Scriptorium, just before speaking to Ciaran'). If your client cannot send parameters, omit and the engine will generate a label."
+        "Optional but recommended. A concise, evocative one-line description of what is happening in this moment: where the player is, what they hold, and/or what they just did (e.g. 'Kitchen, fire in the hearth, torch in hand' or 'Scriptorium, Ciaran looks up from his manuscript'). This becomes the bookmark label in list_bookmarks. If omitted, the engine generates a label from recent history."
       ),
   });
   server.registerTool(
@@ -122,7 +122,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Bookmark",
       description:
-        "Saves the current world state as a restore point. When calling this tool, provide a description: one short line summarizing the moment — where the player is, what they hold, and/or what they just did (e.g. 'Kitchen, back from cellar, unlit torch in hand' or 'Scriptorium, torch in bracket'). That label is shown in list_bookmarks and when restoring. If the tool is called without parameters, the engine generates a label. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
+        "Saves the current world state as a restore point. When calling this tool, if you can, pass the description parameter with a concise, evocative one-line summary of what's happening in this moment (where the player is, what they hold, what they just did). That label is shown in list_bookmarks and when restoring. If the tool is called without parameters, the engine generates a label from recent history. The player can return to any bookmark later with restore_to_bookmark (use list_bookmarks first to see numbers).",
       inputSchema: BookmarkSchema,
     },
     async (args: unknown) => {
