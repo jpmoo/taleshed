@@ -222,6 +222,24 @@ function assembleDestinationScene(db: Database.Database, locationId: string): De
   return { location: locationEntity, entities, exits };
 }
 
+/** Ensure narrative mentions every exit so the player can see them (e.g. down to cellar). If any exit's destination is missing from prose, append an Exits line. */
+function ensureExitsInProse(
+  prose: string,
+  exits: { direction?: string; target: string }[]
+): string {
+  if (exits.length === 0) return prose;
+  const lower = prose.toLowerCase();
+  const missing = exits.some((e) => {
+    const target = (e.target ?? "").trim();
+    return target.length > 0 && !lower.includes(target.toLowerCase());
+  });
+  if (!missing) return prose;
+  const parts = exits.map((e) => `${e.direction ?? "?"} to ${e.target}`).filter(Boolean);
+  if (parts.length === 0) return prose;
+  const suffix = "\n\nExits: " + parts.join("; ") + ".";
+  return prose.trimEnd() + suffix;
+}
+
 /** Prose that looks like JSON or is too long must not be written to the ledger (would pollute future prompts). */
 const MAX_PROSE_LEDGER = 500;
 function sanitizeProseForLedger(s: string): string {
@@ -712,6 +730,10 @@ export async function takeTurn(
   let prose = mistralResponse.narrative_prose ?? "";
   if (strippedObjectEntities.length > 0 && prose) {
     prose = sanitizeNarrativeStrippedTakes(prose, strippedObjectEntities);
+  }
+  /* When the player stayed in the current location (look, take, etc.), ensure every exit is mentioned so they always see e.g. "down to cellar". */
+  if (!(isMovementCommand(playerCommand) && destTarget != null)) {
+    prose = ensureExitsInProse(prose, ctx.locationExits ?? []);
   }
 
   return {

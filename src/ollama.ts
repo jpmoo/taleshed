@@ -43,7 +43,7 @@ export interface SceneEntity {
 export interface LocationExit {
   label: string;
   target: string;
-  /** Cardinal direction for this exit (north/south/east/west); used so the model can tell the player and match "go east" etc. */
+  /** Direction for this exit (north/south/east/west/up/down etc.); used so the model can tell the player and match "go east", "down", etc. */
   direction?: string;
 }
 
@@ -189,6 +189,8 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
       const dirPart = e.direction ? ` [${e.direction}]` : "";
       out += `  - ${e.label}${dirPart} -> ${e.target}\n`;
     }
+    const exitList = exits.map((e) => `${e.direction ?? "?"} to ${e.target}`).join("; ");
+    out += `REQUIRED: Your narrative_prose must mention every exit above. Include at least: ${exitList}.\n`;
   }
   return out;
 }
@@ -273,7 +275,7 @@ CRITICAL — node_impacts: ONE entry for the location, each entity in ENTITIES P
 
 Return ONLY this JSON structure:
 {
-  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), EVERY exit; then what happened. Never omit an NPC or object from ENTITIES PRESENT. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each (e.g. 'the X holds the Y'). Never describe a listed container as empty.>",
+  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), then EVERY exit (direction and destination for each—see REQUIRED line above; e.g. west to scriptorium; down to cellar); then what happened. Never omit an NPC, object, or exit. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each. Never describe a listed container as empty.>",
   "action_result": "<success | failure | partial>",
   "node_impacts": [
     {
