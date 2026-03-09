@@ -728,6 +728,10 @@ export async function takeTurn(
   if (isMovementCommand(playerCommand) && destTarget != null) {
     const playerEntry = impactByNode.get("player");
     if (playerEntry) playerEntry.new_location_id = destTarget;
+  } else {
+    /* Player did not give a movement command—do not move them. Clear any model-set player new_location_id so we never apply a spurious move (e.g. model returning kitchen on a "take torch" turn). */
+    const playerEntry = impactByNode.get("player");
+    if (playerEntry) playerEntry.new_location_id = undefined;
   }
   /* Only allow moving an object to the player when the player's command explicitly took that object (e.g. "take torch"). Block model from putting objects in hand on "apologize", "look", etc. */
   const strippedObjectEntities: { node_id: string; name?: string }[] = [];
