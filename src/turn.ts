@@ -415,6 +415,13 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
     }
   }
 
+  const inventoryEntities: SceneEntity[] = inventory.map((node) =>
+    toSceneEntity(
+      node,
+      getRecentHistoryForNode(db, node.node_id, 3).map((h) => sanitizeProseForPrompt(h.prose_impact)).filter(Boolean)
+    )
+  );
+
   debugLog("scene entities", `location: ${location.node_id} | entity node_ids: ${entities.map((e) => e.node_id).join(", ")}`);
 
   return {
@@ -426,6 +433,7 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
     entities,
     player: playerEntity,
     inventoryNodeIds,
+    inventoryEntities,
     vocabulary,
     locationExits,
   };
@@ -591,9 +599,26 @@ export async function takeTurn(
     if (node_id === "player" || node_id === locationNodeId) continue;
     if (entry.new_location_id !== "player") continue;
     const entity = ctx.entities.find((e) => e.node_id === node_id);
-    if (!isTakeCommandForObject(playerCommand, node_id, entity?.name)) {
+    const nodeForName = entity ? undefined : getNode(db, node_id);
+    const name = entity?.name ?? nodeForName?.name;
+    if (!isTakeCommandForObject(playerCommand, node_id, name)) {
       entry.new_location_id = undefined;
-      strippedObjectEntities.push({ node_id, name: entity?.name });
+      strippedObjectEntities.push({ node_id, name });
+    }
+  }
+  /* When the player took only the contents (e.g. "take torch"), do not also take the container. Strip new_location_id from any container whose contained object was the one explicitly taken. */
+  for (const [node_id, entry] of impactByNode) {
+    if (entry.new_location_id !== "player" || node_id === "player" || node_id === locationNodeId) continue;
+    const contents = getEntitiesInLocation(db, node_id);
+    const playerTookAContained = contents.some((c) => {
+      const e = impactByNode.get(c.node_id);
+      if (e?.new_location_id !== "player") return false;
+      return isTakeCommandForObject(playerCommand, c.node_id, c.name);
+    });
+    if (playerTookAContained) {
+      entry.new_location_id = undefined;
+      const node = getNode(db, node_id);
+      strippedObjectEntities.push({ node_id, name: node?.name });
     }
   }
 
@@ -683,7 +708,9 @@ export async function takeTurn(
           const modelAcknowledgedCurrent =
             entry.adjectives_old.length > 0 &&
             JSON.stringify(entry.adjectives_old) === currentJson;
-          if (modelReturnedEmpty && nodeHadAdjectives && !modelAcknowledgedCurrent) {
+          /* Never overwrite inventory item adjectives with empty when the node has state (e.g. lit torch). */
+          const isInventory = ctx.inventoryNodeIds.includes(node_id);
+          if (modelReturnedEmpty && nodeHadAdjectives && (isInventory || !modelAcknowledgedCurrent)) {
             continue;
           }
           updateWorldGraphAdjectives(db, node_id, newJson);
