@@ -85,7 +85,23 @@ export async function handleUpdateNodeAdjectives(
   const rawAdjectives = Array.isArray(args.adjectives) ? args.adjectives : [];
   let adjectives = [...new Set(rawAdjectives.map((a) => String(a).trim()).filter(Boolean))];
   const vocabulary = getFullVocabulary(db);
-  const vocabLower = new Set(vocabulary.map((v) => v.adjective.toLowerCase()));
+  /* States are represented by vocabulary terms only. Negations (e.g. unlit, unlocked, "not X") mean "omit the positive term"—strip the negation term and the corresponding positive term from the list. */
+  const vocabLower = new Set(vocabulary.map((v) => v.adjective.trim().toLowerCase()).filter(Boolean));
+  const toRemove = new Set<string>();
+  for (const a of adjectives) {
+    const lower = a.toLowerCase();
+    for (const v of vocabLower) {
+      if (lower === "un" + v || lower === "not " + v) {
+        toRemove.add(a);
+        toRemove.add(vocabulary.find((x) => x.adjective.toLowerCase() === v)?.adjective ?? v);
+        break;
+      }
+    }
+  }
+  if (toRemove.size > 0) {
+    const removeLower = new Set([...toRemove].map((x) => x.toLowerCase()));
+    adjectives = adjectives.filter((x) => !removeLower.has(x.toLowerCase()));
+  }
   const candidatesNotInVocab = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
   if (candidatesNotInVocab.length > 0) {
     const resolveMap = await resolveRedundantAdjectives(candidatesNotInVocab, vocabulary);

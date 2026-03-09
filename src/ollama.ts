@@ -128,10 +128,13 @@ CRITICAL — LITERAL ACTIONS ONLY (no extra, no implied):
 - Offering or asking is not doing. If the player only offers or asks (e.g. "offer to light the torch", "shall I open the door?"), narrate the offer and the response only; do NOT perform the action or change any object's/location's state (lit, open, unlocked, etc.)—only an explicit command does that.
 - "Take X" = add X to inventory only. Set new_location_id to "player" in the **taken object's** entry ONLY when the player's command was explicitly to take that object (e.g. "take torch", "get the torch")—do NOT set it for look, examine, apologize, talk, or because your narrative describes the player holding something; only an explicit take command moves an object. When the player takes something that is inside a container (e.g. "take torch" when the torch is in a bracket), set new_location_id to "player" only for the taken object (the torch), not for the container (the bracket); the container stays in place. If the player did not say to take an object (e.g. they said "apologize to Ciaran", "look", "go east"), do NOT set new_location_id on any object; objects stay where they are. Without new_location_id on the taken object the engine will not move it. Do NOT put new_location_id on the player entry for a take (the player's new_location_id is only for movement to a location). Do NOT add an adjective to the object; use new_location_id only. Do NOT set new_location_id when the narrative has the object stay in place (e.g. lighting the torch in its bracket). Taking does not imply using: state changes (lit, open, unlocked, activated) require an explicit player command for that action. When the player does take an object and you set new_location_id to "player", use this exact wording only: in narrative_prose write "The player now holds the [object]." (e.g. "The player now holds the torch."); in that object's prose_impact write exactly "Taken by player." Do not use any other phrasing for the player taking or holding an object.
 - "Drop X" / "put down X" = set the dropped object's new_location_id to the **current location** (the location's node_id, e.g. kitchen). The object ends up in the room, on the ground. Do NOT set new_location_id to another entity (hearth, fire, table); only the current location is valid for a drop.
+- "Put X in Y" / "place X in Y" = when the player puts an object (from Inventory) into a container (in ENTITIES PRESENT, e.g. a torch bracket), set that **object's** (X's) new_location_id to the **container's** node_id (e.g. bracket_01). The object leaves the player's inventory. Do NOT set the container's new_location_id to "player". Include an entry for the object (e.g. torch_01) with new_location_id set to the container (e.g. bracket_01); the container keeps its own entry with no new_location_id.
+- NPCs cannot take or receive the player's items unless the player explicitly gives that item to that NPC (e.g. "give carrot to Ciaran", "give Ciaran the carrot"). If the player only talks about, offers, or mentions the item, the NPC may respond but does not take it; do NOT set that object's new_location_id to the NPC. Only an explicit give command moves the item to the NPC.
 
 CRITICAL — STATE CHANGES ONLY BY EXPLICIT ACTION:
 - Nothing may light, ignite, catch fire, activate, open, close, unlock, or otherwise change state unless the player explicitly performed an action that causes it (e.g. "light the torch", "use the key"). No object or location may change state on its own. FORBIDDEN in narrative: an object changing state "of its own accord", "by the logic of this world", "at the taking", "when you pick it up", "as you touch it", or similar—e.g. torch "comes alight at the taking" or "already alight", door "opens as you reach for it". When the player only TAKES an object, its state does not change—describe it keeping its current state until they explicitly perform the action that changes it. Do not use narrative convenience or atmosphere as a reason for state change ("It would be dramatic", "the scene needed light", "it felt right" are not allowed).
-- A state-changing action (e.g. lighting, opening a lock) is only possible if the means exists in Inventory or ENTITIES PRESENT; scenery or location text alone is not enough. Do not allow outcomes the scene cannot support.`;
+- A state-changing action (e.g. lighting, opening a lock) is only possible if the means exists in Inventory or ENTITIES PRESENT; scenery or location text alone is not enough. Do not allow outcomes the scene cannot support.
+- When an entity's or another entity's description states a rule for what happens when something is used on it, placed in it, or otherwise interacts (e.g. \"if X then Y\"), apply that rule to the affected node: set adjectives_new to the full resulting state—remove any adjectives that no longer apply and add any that do. Use only vocabulary terms. Represent \"no longer X\" by omitting X from adjectives_new, not by adding a negation term (e.g. do not add \"unlit\").`;
 }
 
 function buildSectionB(vocabulary: VocabularyItem[]): string {
@@ -141,7 +144,7 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
   return `VOCABULARY (adjectives and their rules):
 ${vocabJson}
 
-You MUST apply each adjective's rule_description when deciding what happens. The rules are authoritative—follow what each rule_description says. For example: if a rule says something provides light or illuminates, treat that as a light source where relevant; if it says something blocks passage or interaction until a key or action, treat it as blocking until the condition is met; if it describes an NPC's disposition or limits how they behave, let that guide their behavior; if it describes object or location state (visibility of contents, whether something can perform its function), apply that. Do not rely on the adjective name alone—use the rule_description. When assigning adjectives to nodes, use existing vocabulary terms where possible. You may use new adjectives in adjectives_new if the story calls for it; the engine will define any new terms separately.`;
+You MUST apply each adjective's rule_description when deciding what happens. The rules are authoritative—follow what each rule_description says. For example: if a rule says something provides light or illuminates, treat that as a light source where relevant; if it blocks passage or interaction until a key or action, treat it as blocking; if it describes an NPC's disposition, let that guide their behavior; if it describes object or location state, apply that. When assigning adjectives to nodes, use only vocabulary terms (or new terms the engine will define). Represent \"no longer X\" by omitting X from adjectives_new, not by adding a negation (e.g. do not add \"unlit\" or \"unlocked\").`;
 }
 
 function buildSectionC(ctx: SceneContext): string {
@@ -168,12 +171,11 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
   }
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
-    const inside =
-      e.location_id != null && e.location_id !== loc.node_id ? ` | inside: ${e.location_id}` : "";
+    const locId = e.location_id ?? loc.node_id;
     const containsList = containedBy.get(e.node_id);
     const contains =
       containsList != null && containsList.length > 0 ? ` | contains: ${containsList.join(", ")}` : "";
-    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${inside}${contains}\n`;
+    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | location_id: ${locId} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${contains}\n`;
     out += `  Recent history: ${e.recent_history.join(" ") || "(none)"}\n`;
   }
   const hasContainers = containedBy.size > 0;
@@ -182,11 +184,12 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
   }
   out += `\nPLAYER:\n`;
   const playerAdj = Array.isArray(ctx.player.adjectives) ? ctx.player.adjectives : [];
-  out += `- node_id: player | location: ${(ctx.player as { location_id?: string }).location_id ?? "?"} | adjectives: ${JSON.stringify(playerAdj)}\n`;
+  const playerLocId = (ctx.player as { location_id?: string }).location_id ?? "?";
+  out += `- node_id: player | location_id: ${playerLocId} | adjectives: ${JSON.stringify(playerAdj)}\n`;
   if (ctx.inventoryEntities && ctx.inventoryEntities.length > 0) {
-    out += `  Inventory (each item's adjectives must be preserved in node_impacts unless this turn changes them): ${ctx.inventoryEntities.map((e) => `${e.node_id} ${JSON.stringify(e.adjectives ?? [])}`).join("; ")}\n`;
+    out += `  Inventory (location_id: player; each item's adjectives must be preserved in node_impacts unless this turn changes them): ${ctx.inventoryEntities.map((e) => `${e.node_id} ${JSON.stringify(e.adjectives ?? [])}`).join("; ")}\n`;
   } else {
-    out += `  Inventory: ${JSON.stringify(ctx.inventoryNodeIds)}\n`;
+    out += `  Inventory (location_id: player): ${JSON.stringify(ctx.inventoryNodeIds)}\n`;
   }
   out += `  Recent history: ${ctx.player.recent_history.join(" ") || "(none)"}\n`;
   const exits = ctx.locationExits ?? [];
@@ -230,7 +233,8 @@ Location adjectives: ${JSON.stringify(dest.location.adjectives ?? [])}
     out += `Entities present at destination (describe each in your narrative after the move):\n`;
     for (const e of dest.entities) {
       const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
-      out += `- ${e.node_type} | ${e.node_id} | ${e.name} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}\n`;
+      const locId = e.location_id ?? dest.location.node_id;
+      out += `- ${e.node_type} | ${e.node_id} | ${e.name} | location_id: ${locId} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}\n`;
     }
   } else {
     out += `Entities present at destination: (none)\n`;
@@ -278,16 +282,22 @@ function buildSectionE(
   const cmd = playerCommand.trim().toLowerCase();
   const isOfferOrQuestion = /^\s*(offer to|may i\b|shall i\b|would you like me to|want me to|can i get you|I could\b|I can get you\b|how about i\b)/i.test(playerCommand.trim());
   const isDescribeOnly = /^\s*(look|examine|l|x|start|begin)(\s+around|\s+at|\s+here)?\s*$/i.test(playerCommand.trim()) || cmd === "l" || cmd === "x";
+  const isInventoryOnly = cmd === "i" || cmd === "inventory";
   const offerBlock = isOfferOrQuestion
     ? `\n*** OFFER/QUESTION DETECTED: The player ONLY offered or asked—they did NOT give a command to do it. You must NOT perform the action (do not light, open, unlock, give, or change any object/location state). Do NOT set adjectives_new to "lit", "open", or any state change for any node. Narrate ONLY the offer and the NPC's or world's response (e.g. Ciaran says he would welcome light, or nods). The torch does NOT get lit; no object or location changes state this turn. ***\n\n`
     : "";
   const describeOnlyBlock = !isOfferOrQuestion && isDescribeOnly
     ? `\n*** DESCRIBE-ONLY: The player only asked to look or describe the scene. Do NOT perform any action (do not take, use, open, or move any object). Do NOT set new_location_id for any object or for the player. Describe the FULL scene: the location and every entity in ENTITIES PRESENT—name each NPC and mention each object. Do not skip any character or object. ***\n\n`
     : "";
+  const inventoryOnlyBlock = !isOfferOrQuestion && isDescribeOnly === false && isInventoryOnly
+    ? `\n*** INVENTORY: The player asked for their inventory (e.g. "i" or "inventory"). Describe ONLY what the player is carrying—the items listed in the PLAYER/Inventory line above (location_id: player). Do NOT describe the location, ENTITIES PRESENT, exits, or anything else. List only those items. If Inventory is empty, say they are carrying nothing. Do NOT set new_location_id for any object or for the player. ***\n\n`
+    : "";
   return `PLAYER ACTION: ${playerCommand}
-${offerBlock}${describeOnlyBlock}START/BEGIN: If the player said "start" or "begin", describe the full scene including every NPC and object in ENTITIES PRESENT by name. Do NOT set new_location_id for any object. No state changes.
+${offerBlock}${describeOnlyBlock}${inventoryOnlyBlock}START/BEGIN: If the player said "start" or "begin", describe the full scene including every NPC and object in ENTITIES PRESENT by name. Do NOT set new_location_id for any object. No state changes.
 ${containmentLine}TAKE: Set new_location_id to "player" in the **taken object's** entry only (e.g. torch_01), not in the player's entry. Without new_location_id on the taken object, the object will not move to the player. Omit new_location_id for that object if it stays in place (e.g. lighting it in its bracket). When you do set new_location_id to "player" for an object: in narrative_prose use exactly "The player now holds the [object]." (e.g. "The player now holds the torch."); in that object's prose_impact use exactly "Taken by player."
 DROP/PUT DOWN: When the player drops or puts down an object (e.g. "drop torch", "put down the torch"), set that object's new_location_id to the **current location** (the location's node_id, e.g. kitchen)—the object ends up in the room, on the ground. Do NOT set new_location_id to another entity (hearth, fire, table, brazier); the object must go to the current location only. Describe the drop in narrative_prose (e.g. "You set the torch down." or "The torch lies on the floor."); in that object's prose_impact use e.g. "Dropped by player."
+PUT IN CONTAINER: When the player puts an object into a container (e.g. "put the torch in the bracket"), set that **object's** new_location_id to the **container's** node_id (e.g. bracket_01). Do NOT set the container's new_location_id to "player". Include the object in node_impacts with new_location_id set to the container.
+GIVE TO NPC: NPCs do not take the player's items unless the player explicitly gives (e.g. "give carrot to Ciaran"). If the player only offers or mentions the item, do NOT set that object's new_location_id to the NPC; the item stays in inventory.
 Reminder: Literal actions only; offers/questions do not perform the action; objects do not change state on their own or when taken.
 ${exitLine}${destinationLine}
 CRITICAL — node_impacts: ONE entry for the location, each entity in ENTITIES PRESENT, each item in Inventory (see Inventory line above—preserve each item's adjectives unless this turn changes them), and the player (no other node_ids). If the player targeted someone/something not present, action fails but node_impacts still lists location, ENTITIES PRESENT, Inventory items, player. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only game-relevant qualities (disposition, lit/closed)—not narrative moments like "noticed looking up" (use prose_impact). When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
@@ -486,7 +496,7 @@ ${vocabList.map((a) => `- ${a}`).join("\n")}
 CANDIDATE TERMS (these are not in the vocabulary yet; some may be true synonyms of existing terms):
 ${terms.join(", ")}
 
-For each candidate: if it has the SAME meaning as an existing vocabulary term (true synonym), respond with that term exactly as listed; otherwise respond with the candidate unchanged. Only map when the two mean the same thing (e.g. "mad" -> "hostile"). Do NOT map when: (1) the candidate is a lessening or negation of the term ("less guarded", "unarmed", "not hostile" are not synonyms for "guarded" or "hostile"); (2) the candidate is object/location state and the term is NPC disposition, or vice versa (e.g. "waiting for flame", "in player's inventory" must not become "curious" or "guarded"). Return those candidates unchanged.
+For each candidate: if it has the SAME meaning as an existing vocabulary term (true synonym), respond with that term exactly as listed; otherwise respond with the candidate unchanged. Only map when the two mean the same thing (e.g. "mad" -> "hostile"). Do NOT map when: (1) the candidate is a negation, opposite, or lessening of a vocabulary term (e.g. un+X, "not X", "less X")—return the candidate unchanged and do not map it to any other term; (2) the candidate is object/location state and the term is NPC disposition, or vice versa. Return those candidates unchanged.
 
 CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list—exact spelling—only when it is a true synonym, OR (2) the candidate itself unchanged. Example: {"content": "settled", "less_guarded": "less_guarded"} if "content" is a synonym for "settled" and "less_guarded" is a distinct state (not a synonym for "guarded").
 

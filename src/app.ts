@@ -45,7 +45,7 @@ const TakeTurnSchema = z.object({
 });
 
 const UpdateNodeAdjectivesSchema = z.object({
-  node_id: z.string().describe("Exact node_id of the entity (use IDs from take_turn's scene_node_ids or the scene: e.g. torch_01, bracket_01, ciaran, kitchen, player). Objects often have a numeric suffix (_01); use that, not the display name."),
+  node_id: z.string().describe("Exact node_id of the entity (use IDs from take_turn's scene_node_ids: e.g. torch_01, ciaran, player). Use only vocabulary terms. To indicate a state no longer applies, omit that term from the list; do not add negation terms (e.g. unlit, unlocked)."),
   adjectives: z
     .array(z.string())
     .describe("Full list of adjectives that now describe this entity. Replace the previous set; new terms get definitions automatically."),

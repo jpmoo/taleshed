@@ -78,6 +78,72 @@ function isDropCommand(playerCommand: string): boolean {
   return /\b(drop|put\s+down|set\s+down|place\s+down)\b/.test(cmd) || /^\s*(drop|put\s+down|set\s+down)\s+/i.test(playerCommand.trim());
 }
 
+/** True when the player explicitly puts an object (from inventory) into a container (e.g. "put the torch in the bracket", "place torch in bracket"). */
+function isPutInContainerCommand(
+  playerCommand: string,
+  objectNodeId: string,
+  objectName?: string,
+  containerNodeId?: string,
+  containerName?: string
+): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  const putIn =
+    /\b(put|place|set|mount|stick)\s+.+\s+(in\s+to?|into)\s+/.test(cmd) ||
+    /\b(put|place|set|mount)\s+.+\s+in\s+/.test(cmd);
+  if (!putIn) return false;
+  const objectKeywords: string[] = [];
+  const fromId = objectNodeId.replace(/_?\d*$/, "").toLowerCase();
+  if (fromId.length >= 2) objectKeywords.push(fromId);
+  if (objectName?.trim()) {
+    const w = objectName.trim().toLowerCase().replace(/^(the|a|an)\s+/, "").split(/\s+/)[0];
+    if (w.length >= 2 && !objectKeywords.includes(w)) objectKeywords.push(w);
+  }
+  const containerKeywords: string[] = [];
+  if (containerNodeId) {
+    const cId = containerNodeId.replace(/_?\d*$/, "").toLowerCase();
+    if (cId.length >= 2) containerKeywords.push(cId);
+  }
+  if (containerName?.trim()) {
+    const w = containerName.trim().toLowerCase().replace(/^(the|a|an)\s+/, "").split(/\s+/)[0];
+    if (w.length >= 2 && !containerKeywords.includes(w)) containerKeywords.push(w);
+  }
+  const hasObject = objectKeywords.length === 0 || objectKeywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
+  const hasContainer = containerKeywords.length === 0 || containerKeywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
+  return hasObject && hasContainer;
+}
+
+/** True when the player explicitly gives an item to an NPC (e.g. "give carrot to Ciaran", "give Ciaran the carrot"). Offering or talking about the item is not giving. */
+function isGiveToNpcCommand(
+  playerCommand: string,
+  objectNodeId: string,
+  objectName?: string,
+  npcNodeId?: string,
+  npcName?: string
+): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  const giveVerb = /\b(give|hand)\b/.test(cmd) && (/^\s*(give|hand)\s+/i.test(playerCommand.trim()) || /\b(give|hand)\s+.+\s+(to|the)\s+/i.test(playerCommand.trim()));
+  if (!giveVerb) return false;
+  const objectKeywords: string[] = [];
+  const fromId = objectNodeId.replace(/_?\d*$/, "").toLowerCase();
+  if (fromId.length >= 2) objectKeywords.push(fromId);
+  if (objectName?.trim()) {
+    const w = objectName.trim().toLowerCase().replace(/^(the|a|an)\s+/, "").split(/\s+/)[0];
+    if (w.length >= 2 && !objectKeywords.includes(w)) objectKeywords.push(w);
+  }
+  const npcKeywords: string[] = [];
+  if (npcNodeId) {
+    const nId = npcNodeId.replace(/_?\d*$/, "").toLowerCase();
+    if (nId.length >= 2) npcKeywords.push(nId);
+  }
+  if (npcName?.trim()) {
+    const namePart = npcName.trim().toLowerCase().replace(/^(brother|sister|the)\s+/, "").split(/\s+/)[0];
+    if (namePart.length >= 2 && !npcKeywords.includes(namePart)) npcKeywords.push(namePart);
+  }
+  const hasObject = objectKeywords.length === 0 || objectKeywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
+  const hasNpc = npcKeywords.length === 0 || npcKeywords.some((kw) => new RegExp("\\b" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(playerCommand));
+  return hasObject && hasNpc;
+}
+
 /** Remove from narrative any phrase that says the player holds, carries, or took the given object (so returned prose is consistent with stripped object moves). */
 function sanitizeNarrativeStrippedTakes(
   narrative: string,
@@ -646,12 +712,28 @@ export async function takeTurn(
       strippedObjectEntities.push({ node_id, name: node?.name });
     }
   }
-  /* When the player drops an object (inventory item moving somewhere other than player), the only valid target is the current room. Do not allow the model to put the object into another entity (e.g. hearth_fire). */
+  /* When an inventory object moves somewhere other than player: allow current location (drop), or a container in scene (put X in Y), or an NPC in scene (give X to Y); otherwise force to room or strip. */
   for (const [node_id, entry] of impactByNode) {
     if (node_id === "player" || node_id === locationNodeId) continue;
     if (entry.new_location_id == null || entry.new_location_id === "player") continue;
     if (!ctx.inventoryNodeIds.includes(node_id)) continue;
-    entry.new_location_id = locationNodeId;
+    const targetId = String(entry.new_location_id).trim();
+    if (targetId === locationNodeId) continue; /* drop to room: keep */
+    const targetEntity = ctx.entities.find((e) => e.node_id === targetId);
+    if (targetEntity) {
+      const objEntity =
+        ctx.inventoryEntities?.find((e) => e.node_id === node_id) ??
+        ctx.entities.find((e) => e.node_id === node_id) ??
+        getNode(db, node_id);
+      const objName = objEntity && "name" in objEntity ? (objEntity as { name?: string }).name : undefined;
+      const containerName = targetEntity.node_type === "object" ? targetEntity.name : undefined;
+      const npcName = targetEntity.node_type === "npc" ? targetEntity.name : undefined;
+      if (targetEntity.node_type === "object" && isPutInContainerCommand(playerCommand, node_id, objName, targetId, containerName)) continue; /* put in container: keep */
+      if (targetEntity.node_type === "npc" && isGiveToNpcCommand(playerCommand, node_id, objName, targetId, npcName)) continue; /* give to NPC: keep */
+      entry.new_location_id = undefined; /* e.g. model had NPC "take" carrot without explicit give: item stays in inventory */
+    } else {
+      entry.new_location_id = locationNodeId; /* target not in scene (e.g. hearth when elsewhere): drop to room */
+    }
   }
 
   const vocabulary = getFullVocabulary(db);
