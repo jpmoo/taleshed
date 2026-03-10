@@ -109,11 +109,11 @@ CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - adjectives_old and adjectives_new must contain ONLY persistent, game-affecting qualities (disposition: guarded, hostile; object/location state: lit, closed, locked). Never use a location name as an adjective. FORBIDDEN in adjectives_new: momentary actions, one-off observations, or transient states (e.g. "noticed looking up", "looking up", "observed", "currently observing", "engrossed in work", "noticed the player")—put these in prose_impact only. Adjectives must be from VOCABULARY and must describe how the node persistently interacts with the player or world; if the only change is a momentary action (looked up, nodded), keep adjectives_new equal to adjectives_old. Do not invent new adjective phrases—use only existing vocabulary terms.
 - When your narrative explicitly describes a change in an NPC's disposition or attitude (e.g. they warm up, smile, become less guarded, show trust, relax), you MUST set that NPC's adjectives_new to reflect that state. If you describe them as no longer guarded, remove "guarded" from adjectives_new or add an appropriate term; if you describe them as pleased or open, add or adjust adjectives accordingly. The engine only persists what you put in adjectives_new—so if your prose says Ciaran "allows himself a faint smile" and "is genuinely pleased" but you leave adjectives_new as ["guarded"], the next turn will still show him as guarded. adjectives_new must match the state your narrative describes. For entering, looking, or movement-only commands (no interaction with an NPC or object), keep adjectives_new equal to adjectives_old for all nodes.
 - For NPCs, dispositional adjectives (e.g. guarded, hostile) must not be dropped when you add physical or other descriptive adjectives (e.g. portly, rosy-cheeked). Keep all dispositional adjectives from adjectives_old in adjectives_new unless your narrative explicitly describes a change in disposition (e.g. they warm up and are no longer guarded). Adding appearance or other traits is fine; do not do it at the expense of existing disposition.
-- You may add atmospheric room detail (shelves, curtain, bench, etc.) as scenery for color. Do not add any fire-producing detail (no brazier, candle, hearth, lamp, etc.) as set-dressing—only locations or objects that are explicitly in ENTITIES PRESENT can provide light or fire. Useful flame or fire (anything that can light another object or be taken/used) must never exist only in scenery or in a location's description. Candles, lanterns, braziers, etc. mentioned only in room text are never sufficient to light something or to take and use; only objects listed in ENTITIES PRESENT (e.g. a fire object in the room, a torch) can be used that way.
-- FORBIDDEN in narrative_prose: mentioning a hearth, fire, brazier, candle, or lamp unless that object is listed in ENTITIES PRESENT. If the current location has no such entity (e.g. scriptorium has no hearth_fire), do not write that anyone sits "by the hearth" or that the room has a fire—describe only what is in ENTITIES PRESENT.
+- You may add atmospheric scenery: furniture, decorations, and lively detail (e.g. shelves, curtain, bench, dust motes, worn stone) that do not allow substantive interaction—no taking, using, or affecting world state. Scenery is for color only; the player can reference it for narrative-only actions (sit on a bench, lean on the wall). DEFINITIVELY FORBIDDEN in scenery or narrative: any light source, fire, or flame not listed in ENTITIES PRESENT. Do not add a hearth, brazier, candle, lamp, oil lamp, torch (unless in the list), or any glowing/burning thing; only entities explicitly in ENTITIES PRESENT may provide light or fire. If the location has no such entity, the room has no invented light—describe grey light from windows, dimness, or darkness as the location allows, but never invent a fire or lamp.
+- FORBIDDEN in narrative_prose: mentioning fire, flame, or any light source (hearth, brazier, candle, lamp, oil lamp, etc.) unless that object is listed in ENTITIES PRESENT. If the current location has no such entity, do not write that the room has a fire, a lamp, or that something "casts light"—only entities in ENTITIES PRESENT can be light sources.
 
 SCENERY (atmospheric detail not in ENTITIES PRESENT):
-- The player may interact with scenery for narrative-only actions: sit on a bench, lean against the wall, look at the curtain, etc. Scenery must NOT include hearth, fire, brazier, candle, or lamp; only entities listed in ENTITIES PRESENT may be fire or light sources. Narrate the action and optionally give the player a transient adjective (e.g. "sitting") for consistency; no other node in the world changes. Scenery cannot be taken, destroyed, moved, or used to affect the world—no taking the curtain, no burning the bench. If the player tries to take, use, destroy, or otherwise change scenery, the action fails (e.g. "You cannot take the bench; it is fixed to the room.").
+- You may invent scenery for creativity: furniture, decorations, sensory detail (e.g. bench, curtain, bookcase, armchair, dust, cold tea) that the player cannot take, use, or affect in a substantive way. Scenery cannot be taken, destroyed, moved, or used to change world state; narrative-only interaction is fine (sit, lean, look). Scenery must NOT include any fire, flame, or light source—only entities listed in ENTITIES PRESENT may be fire or light sources. If the player tries to take or use scenery, the action fails (e.g. "You cannot take the bench; it is fixed to the room.").
 
 CRITICAL — WHAT THE PLAYER CAN INTERACT WITH:
 - The player can only take, use, talk to, destroy, or move (1) the current location, (2) entities in ENTITIES PRESENT, or (3) items in Inventory. People and objects elsewhere are not present. If the player tries to interact with something or someone not in ENTITIES PRESENT and not in Inventory, the action FAILS: return action_result "failure", narrative_prose stating they are not here (e.g. "Ciaran is not in this room."). Do NOT narrate the interaction as if it happened; do not narrate success or bring the absent person or object into the scene. node_impacts must contain the location, each entity in ENTITIES PRESENT, each item in Inventory, and the player—no entry for an absent character or object (the engine ignores any other node_id). Exception: scenery-only actions (e.g. sit on a bench, lean on the wall) are allowed with no or minimal node impact.
@@ -123,6 +123,7 @@ PLAYER INVENTORY AND SCENE ARE EXHAUSTIVE: The player has only the items in Inve
 DARK (location adjective, authoring-only—never add in game): "dark" is set at authoring; when there is no light source on the player or in the room, the engine makes it a completely overriding condition (ENTITIES PRESENT empty, only the entrance exit). If you see "dark" on the location and ENTITIES PRESENT is empty (or the prompt says "DARK SCENE"), describe ONLY impenetrable darkness and that single visible exit. Do not describe or imply the room, other exits, people, or objects—the scene cannot support that; the player sees nothing. Never add or remove "dark" from the location's adjectives_new; the engine preserves it and negates it only when a light source is present.
 
 When writing narrative_prose:
+- Describe the location (use its Description), every entity in ENTITIES PRESENT (you MUST name each NPC and mention each object—e.g. Brother Ciarán, the torch bracket, the torch), and every exit. You may add non-interactive scenery (furniture, decorations, lively detail) for atmosphere; scenery cannot be taken or used to affect world state. DEFINITIVELY FORBIDDEN: any fire, flame, or light source not in ENTITIES PRESENT (no oil lamp, candle, hearth, brazier, or "the room is lit by X" unless X is in the list). Do not replace or omit the listed entities with a different scene.
 - You MUST mention the location, every entity in ENTITIES PRESENT, and every exit in EXITS FROM THIS LOCATION. Describe the location/room first, then each NPC by name, then each object, then the exits (direction and destination for each). Every NPC in ENTITIES PRESENT must be named and appear in your narrative—never omit a character who is present. If ENTITIES PRESENT lists only the location (no other entities), do not describe any people or objects—there are none here; describe only the location and every exit. For "look", "start", or "begin", give a full scene description that includes each person and object by name. For each object in the list, mention the object itself (e.g. "the torch", "an unlit torch in the bracket") so the player can refer to it (e.g. "take torch"). For each exit, use the exact label and direction from the list: e.g. if the list says "battered door [east] -> kitchen", describe that as the battered door leading east to the kitchen; if it says "heavy wooden door braced in iron [north] -> cloister", describe that as the heavy door leading north to the cloister. Do not swap or mix up which door goes which direction. Where an entity line shows "contains: X", that container has X inside—follow the CONTAINMENT RULE (see below); never describe that container as empty. Never add people or objects not in the list; never omit a listed entity or a listed exit.
 
 CRITICAL — LITERAL ACTIONS ONLY (no extra, no implied):
@@ -261,6 +262,11 @@ function buildSectionE(
   destinationScene?: DestinationScene | null
 ): string {
   const loc = ctx.location;
+  const requiredNodeIds = [
+    ...ctx.entities.map((e) => e.node_id),
+    ...(ctx.inventoryNodeIds ?? []),
+    "player",
+  ].join(", ");
   const containedBy = new Map<string, string[]>();
   for (const e of ctx.entities) {
     const locId = e.location_id ?? null;
@@ -306,7 +312,7 @@ PUT IN CONTAINER: When the player puts an object into a container (e.g. "put the
 GIVE TO NPC: NPCs do not take the player's items unless the player explicitly gives (e.g. "give carrot to Ciaran"). If the player only offers or mentions the item, do NOT set that object's new_location_id to the NPC; the item stays in inventory.
 Reminder: Literal actions only; offers/questions do not perform the action; objects do not change state on their own or when taken.
 ${exitLine}${destinationLine}
-CRITICAL — node_impacts: ONE entry for the location, each entity in ENTITIES PRESENT, each item in Inventory (see Inventory line above—preserve each item's adjectives unless this turn changes them), and the player (no other node_ids). If the player targeted someone/something not present, action fails but node_impacts still lists location, ENTITIES PRESENT, Inventory items, player. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only vocabulary terms for persistent state (disposition, lit/closed). Never add transient or narrative-only phrases (e.g. "noticed looking up", "observed")—use prose_impact for those. When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For NPCs, retain all dispositional adjectives (guarded, hostile, etc.) when adding physical or other adjectives—do not replace disposition with appearance. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
+CRITICAL — node_impacts: You MUST include exactly one entry for each of these node_ids: ${requiredNodeIds}. No other node_ids. If the player targeted someone/something not present, action fails but node_impacts still lists every id above. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only vocabulary terms for persistent state (disposition, lit/closed). Never add transient or narrative-only phrases (e.g. "noticed looking up", "observed")—use prose_impact for those. When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For NPCs, retain all dispositional adjectives (guarded, hostile, etc.) when adding physical or other adjectives—do not replace disposition with appearance. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
 
 Return ONLY this JSON structure:
 {
@@ -345,6 +351,29 @@ export function assemblePrompt(
 const engineCoveredCache = new Map<string, boolean>();
 
 /**
+ * Parse a YES/NO response from Ollama. Only returns true when the answer is explicitly YES.
+ * Handles JSON like { "answer": "NO" } or { "Yes": "" } — the latter must NOT be treated as YES (empty value).
+ */
+function parseYesNoResponse(
+  responseText: string,
+  _logLabel: string,
+  _adjective: string,
+  _debug: boolean
+): boolean {
+  const raw = (responseText || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const val = parsed.answer ?? parsed.response ?? parsed.Yes ?? parsed.yes;
+    const s = String(val ?? "").trim().toUpperCase();
+    return s === "YES";
+  } catch {
+    const upper = raw.toUpperCase();
+    return upper === "YES" || /^YES[\s.,]*$/.test(upper);
+  }
+}
+
+/**
  * Returns true if this adjective's rule describes only containment/placement/possession (where something is, who holds it, or whether a container has contents).
  * The engine handles those via location_id; such adjectives must not be added to vocabulary or applied to nodes.
  * Result is cached by adjective (lowercase) so we only call the LLM once per term per process.
@@ -374,8 +403,7 @@ Answer:`;
       debugLog("engine-covered check request", `adjective: ${adjective}\nrule: ${rule}`);
     }
     const responseText = await callOllama(prompt, "engine-covered check");
-    const raw = (responseText || "").trim().toUpperCase();
-    const yes = raw.startsWith("YES") || raw.includes("YES");
+    const yes = parseYesNoResponse(responseText, "engine-covered check", adjective, DEBUG);
     engineCoveredCache.set(key, yes);
     if (DEBUG) {
       debugLog("engine-covered check result", `adjective: ${adjective}\nraw response: ${responseText || "(empty)"}\nengine_covered: ${yes}`);
@@ -453,8 +481,7 @@ Answer:`;
   try {
     if (DEBUG) debugLog("transient-adjective check request", `adjective: ${adjective}\nrule: ${rule}`);
     const responseText = await callOllama(prompt, "transient-adjective check");
-    const raw = (responseText || "").trim().toUpperCase();
-    const yes = raw.startsWith("YES") || raw.includes("YES");
+    const yes = parseYesNoResponse(responseText, "transient-adjective check", adjective, DEBUG);
     transientAdjectiveCache.set(key, yes);
     if (DEBUG) debugLog("transient-adjective check result", `adjective: ${adjective}\nraw: ${responseText || "(empty)"}\ntransient: ${yes}`);
     return yes;
