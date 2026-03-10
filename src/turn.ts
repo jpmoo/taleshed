@@ -191,6 +191,9 @@ function sanitizeNarrativeStrippedTakes(
 const OLLAMA_UNREACHABLE_PROSE =
   "The world pauses, as if holding its breath. (Engine: Ollama unreachable. Please check the local model service.)";
 
+const OLLAMA_MODEL_NOT_FOUND_PROSE =
+  "The world pauses. (Engine: The configured story model is not available. Check OLLAMA_MODEL and ensure the model is pulled in Ollama.)";
+
 const MALFORMED_RESPONSE_PROSE =
   "The world flickers uncertainly. (Engine: The story engine could not interpret the outcome. Please try again.)";
 
@@ -631,9 +634,20 @@ export async function takeTurn(
     };
   }
 
-  const reachable = await checkOllamaReachable();
-  if (!reachable) {
-    return { result: "error", prose: OLLAMA_UNREACHABLE_PROSE, error: "Ollama unreachable" };
+  const ollamaCheck = await checkOllamaReachable();
+  if (!ollamaCheck.ok) {
+    if (ollamaCheck.error === "model_not_found") {
+      return {
+        result: "error",
+        prose: OLLAMA_MODEL_NOT_FOUND_PROSE,
+        error: "Ollama model not found (check OLLAMA_MODEL)",
+      };
+    }
+    return {
+      result: "error",
+      prose: OLLAMA_UNREACHABLE_PROSE,
+      error: "Ollama unreachable",
+    };
   }
 
   let mistralResponse: MistralResponse;

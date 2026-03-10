@@ -65,8 +65,12 @@ if (DEBUG) {
   try {
     appendLog(ERROR_LOG, `[${new Date().toISOString()}] DEBUG logging enabled (Claude bodies + Ollama prompts/responses)\n`);
   } catch (_) {}
-  checkOllamaReachable().then((ok) => {
-    const msg = ok ? "Ollama connection: OK" : "Ollama connection: FAILED (unreachable)";
+  checkOllamaReachable().then((check) => {
+    const msg = check.ok
+      ? "Ollama connection: OK"
+      : check.error === "model_not_found"
+        ? "Ollama connection: FAILED (model not found)"
+        : "Ollama connection: FAILED (unreachable)";
     const withModel = `${msg} (model: ${OLLAMA_MODEL})`;
     process.stderr.write(`[TaleShed] ${withModel}\n`);
     try {
