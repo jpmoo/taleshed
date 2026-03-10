@@ -21,7 +21,8 @@ export function debugLog(label: string, payload: string) {
 }
 
 const OLLAMA_BASE = process.env["OLLAMA_BASE"] ?? "http://localhost:11434";
-const OLLAMA_MODEL = process.env["OLLAMA_MODEL"] ?? "mistral-nemo";
+/** Model name used for Ollama generate calls; exported so startup log can show it when DEBUG=1. */
+export const OLLAMA_MODEL = process.env["OLLAMA_MODEL"] ?? "mistral-nemo";
 const OLLAMA_TIMEOUT_MS = 30_000;
 
 export interface VocabularyItem {
