@@ -774,10 +774,13 @@ export async function takeTurn(
       strippedObjectEntities.push({ node_id, name: node?.name });
     }
   }
-  /* When the player explicitly took an object (e.g. "take torch", "get key") but the model omitted new_location_id for it, force the take so the object moves to inventory. Applies to any item in the scene (room or container). */
+  /* When the player explicitly took an object (e.g. "take torch", "get key") but the model omitted new_location_id for it, force the take so the object moves to inventory. Do NOT force-take a container when the player took only its contents (e.g. "take torch" must not also take the bracket). */
   for (const entity of ctx.entities) {
     if (entity.node_type !== "object") continue;
     if (!isTakeCommandForObject(playerCommand, entity.node_id, entity.name)) continue;
+    const contents = getEntitiesInLocation(db, entity.node_id);
+    const playerTookAContent = contents.some((c) => isTakeCommandForObject(playerCommand, c.node_id, c.name));
+    if (playerTookAContent) continue; /* Prefer the contained object; we will force that one, not the container. */
     const entry = impactByNode.get(entity.node_id);
     if (!entry || entry.new_location_id === "player") continue;
     entry.new_location_id = "player";
