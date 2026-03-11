@@ -639,15 +639,26 @@
       color: 0x9a9a9a,
       emissive: 0x222222,
     });
+    const matDark = new THREE.MeshPhongMaterial({
+      color: 0x5a5650,
+      emissive: 0x1a1816,
+    });
+
+    function locationIsDark(loc) {
+      const adj = parseAdjectivesFromValue(loc.adjectives);
+      return adj.some(function (a) { return a.toLowerCase() === "dark"; });
+    }
 
     locations.forEach(function (loc) {
       const gx = Number(loc.grid_x) || 0;
       const gy = Number(loc.grid_y) || 0;
       const gz = Number(loc.grid_z) || 0;
       const isPlayerLoc = loc.node_id === playerLocationId;
+      const isDark = locationIsDark(loc);
+      const faceMat = isPlayerLoc ? matCurrent : (isDark ? matDark : matDefault);
       const mesh = new THREE.Mesh(
         boxGeo.clone(),
-        isPlayerLoc ? matCurrent : matDefault
+        faceMat
       );
       mesh.position.set(gx, gy, gz);
       mesh.userData = { nodeId: loc.node_id, fullName: loc.name || loc.node_id };

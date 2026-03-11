@@ -11,7 +11,6 @@ import { fileURLToPath } from "url";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
-import { checkOllamaReachable, OLLAMA_MODEL } from "./ollama.js";
 
 // Log next to project root (parent of dist/), not cwd, so it works from systemd/any cwd
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,18 +64,6 @@ if (DEBUG) {
   try {
     appendLog(ERROR_LOG, `[${new Date().toISOString()}] DEBUG logging enabled (Claude bodies + Ollama prompts/responses)\n`);
   } catch (_) {}
-  checkOllamaReachable().then((check) => {
-    const msg = check.ok
-      ? "Ollama connection: OK"
-      : check.error === "model_not_found"
-        ? "Ollama connection: FAILED (model not found)"
-        : "Ollama connection: FAILED (unreachable)";
-    const withModel = `${msg} (model: ${OLLAMA_MODEL})`;
-    process.stderr.write(`[TaleShed] ${withModel}\n`);
-    try {
-      appendLog(ERROR_LOG, `[${new Date().toISOString()}] [DEBUG] ${withModel}\n`);
-    } catch (_) {}
-  });
 }
 
 const PORT = Number(process.env["TALESHED_PORT"] ?? process.env["PORT"] ?? 3000);
