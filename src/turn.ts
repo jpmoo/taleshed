@@ -522,9 +522,8 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
     if (cameFromId != null) {
       const entranceOnly = locationExits.filter((e) => e.target === cameFromId);
       locationExits = entranceOnly.length > 0 ? entranceOnly : locationExits;
-    } else {
-      locationExits = [];
     }
+    /* When cameFromId is null (e.g. meta lost or player placed in dark room), keep all exits so movement by direction (e.g. "u"/"up") still resolves and the player can leave. */
   }
 
   const inventoryEntities: SceneEntity[] = inventory.map((node) =>
@@ -704,16 +703,22 @@ export async function takeTurn(
   sceneNodeIds.add("player");
   for (const id of ctx.inventoryNodeIds) sceneNodeIds.add(id);
 
-  /* Only apply impacts for nodes that were in the current scene (location, entities here, player, or player inventory). Ignore model output for nodes elsewhere (e.g. "talk to Ciaran" in kitchen must not update Ciaran). */
-  const sceneImpactsOnly = mistralResponse.node_impacts.filter((i) => sceneNodeIds.has(i.node_id));
+  /* Only apply impacts for nodes that were in the current scene (location, entities here, player, or player inventory). Ignore model output for nodes elsewhere. Normalize node_id to lowercase so "Player" matches "player". */
+  const sceneImpactsOnly = mistralResponse.node_impacts.filter((i) => {
+    const id = (i.node_id ?? "").trim();
+    const normalized = id.toLowerCase();
+    return sceneNodeIds.has(id) || (id !== normalized && sceneNodeIds.has(normalized));
+  });
   const actionDescription = normalizeActionDescription(playerCommand);
   const now = new Date().toISOString();
   const impactByNode = new Map(
     sceneImpactsOnly.map((i) => {
       const adjOld = safeParseAdjectives(i.adjectives_old).filter(isValidAdjectiveToken);
       const adjNew = safeParseAdjectives(i.adjectives_new).filter(isValidAdjectiveToken);
+      const rawId = (i.node_id ?? "").trim();
+      const nodeKey = rawId.toLowerCase() || rawId;
       return [
-        i.node_id,
+        nodeKey,
         {
           prose_impact: i.prose_impact ?? "No change.",
           adjectives_old: adjOld,
@@ -1071,6 +1076,21 @@ export async function takeTurn(
             }
           } else {
             updateWorldGraphLocation(db, node_id, resolvedId);
+          }
+        }
+      }
+      /* Safety net: when we resolved a movement (e.g. "u" from dark cellar), ensure the player was actually moved. If the loop above skipped the player (e.g. model returned wrong node_id), apply the move here. */
+      if (isMovementCommand(playerCommand) && destTarget != null) {
+        const playerAfter = getPlayer(db);
+        if (playerAfter && playerAfter.location_id !== destTarget) {
+          const previousLocationId = playerAfter.location_id ?? null;
+          updateWorldGraphLocation(db, "player", destTarget);
+          if (previousLocationId) {
+            updateWorldGraphMeta(
+              db,
+              "player",
+              JSON.stringify({ came_from_location_id: previousLocationId })
+            );
           }
         }
       }
