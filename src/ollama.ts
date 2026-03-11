@@ -178,13 +178,17 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
       containedBy.set(locId, list);
     }
   }
+  const lightCapablePattern = /\b(torch|candle|lamp|taper)\b/i;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
     const locId = e.location_id ?? loc.node_id;
     const containsList = containedBy.get(e.node_id);
     const contains =
       containsList != null && containsList.length > 0 ? ` | contains: ${containsList.join(", ")}` : "";
-    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | location_id: ${locId} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${contains}\n`;
+    const isLightCapable = e.node_type === "object" && (lightCapablePattern.test(e.name) || lightCapablePattern.test(e.base_description ?? ""));
+    const hasLit = adjList.some((a) => String(a).trim().toLowerCase() === "lit");
+    const unlitHint = isLightCapable && !hasLit ? " [UNLIT—describe as unlit only; do NOT say burning, lit, or that it provides light]" : "";
+    out += `- ${e.node_type} | ${e.node_id} | ${e.name} | location_id: ${locId} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${contains}${unlitHint}\n`;
     out += `  Recent history: ${e.recent_history.join(" ") || "(none)"}\n`;
   }
   const hasContainers = containedBy.size > 0;
@@ -319,7 +323,7 @@ CRITICAL — node_impacts: You MUST include exactly one entry for each of these 
 
 Return ONLY this JSON structure:
 {
-  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), then EVERY exit (at least label and direction for each; destination optional—e.g. battered door east; steps down); then what happened. Never omit an NPC, object, or exit. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each. Never describe a listed container as empty.>",
+  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), then EVERY exit (at least label and direction for each; destination optional—e.g. battered door east; steps down); then what happened. Never omit an NPC, object, or exit. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each. Never describe a listed container as empty. Any object marked [UNLIT] or with no 'lit' in adjectives (e.g. torch, candle) must be described as unlit—never as burning, lit, or providing light.>",
   "action_result": "<success | failure | partial>",
   "node_impacts": [
     {
