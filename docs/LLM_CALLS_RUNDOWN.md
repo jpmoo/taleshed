@@ -12,7 +12,7 @@ Order of operations and what each call looks like. `[bracketed]` = per-turn or p
 
 **Role:** Game master: interpret player command, update world, produce narrative and `node_impacts` (including `adjectives_old` / `adjectives_new` per node).
 
-**Prompt flow:** Role → rules (one-line authority) → scene → vocabulary → recent narration → action → output format. Vocabulary appears after the scene so the model sees world state before the term list; a bridging instruction asks it to prefer adjectives already in the scene or vocabulary before proposing new ones.
+**Prompt flow:** Role → rules (one-line authority, then explicit no-invent-light rule and scenery limit) → scene → vocabulary → recent narration → action → output format. Vocabulary appears after the scene so the model sees world state before the term list; a bridging instruction asks it to prefer adjectives already in the scene or vocabulary before proposing new ones. The rules forbid inventing any light source or light-capable object (lamp, oil lamp, candle, torch, etc.) as scenery—only ENTITIES PRESENT may contain those; scenery is limited to non-light, non-takeable detail (e.g. table, bench, curtain, dust, parchment).
 
 **Mockup:**
 
@@ -24,7 +24,9 @@ You must return exactly the fields described below and nothing else.
 
 The entities, exits, and adjectives listed below are the authoritative world state. Do not infer or invent entities not listed. You are encouraged to flesh out story and scenery—atmospheric detail, sensory description, narrative flourish—within those bounds.
 
-CRITICAL — THE ENTITY LIST IS EXHAUSTIVE: [rules: don't invent locations/people/objects, bold = entities, exits, node_impacts format, adjectives from vocabulary, scenery, literal actions, state changes, etc.]
+Do not invent items that can provide light or fire. Only ENTITIES PRESENT may contain lamps, oil lamps, candles, torches, tapers, hearths, or braziers—never add them as scenery (even "unlit" or "cold"). Scenery you may add: furniture, decorations, sensory detail (e.g. table, bench, curtain, dust, parchment, inkwell) that cannot be lit and are not in ENTITIES PRESENT.
+
+CRITICAL — THE ENTITY LIST IS EXHAUSTIVE: [rules: don't invent locations/people/objects—including oil lamp, candle, torch as props; bold = entities; exits; node_impacts format; adjectives from vocabulary; scenery = non-light, non-takeable detail only; literal actions; state changes; etc.]
 
 CURRENT SCENE:
 Location: [<location node_id>] — [<location name>]
