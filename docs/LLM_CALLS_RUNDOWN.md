@@ -12,6 +12,8 @@ Order of operations and what each call looks like. `[bracketed]` = per-turn or p
 
 **Role:** Game master: interpret player command, update world, produce narrative and `node_impacts` (including `adjectives_old` / `adjectives_new` per node).
 
+**Prompt flow:** Role → rules (one-line authority) → scene → vocabulary → recent narration → action → output format. Vocabulary appears after the scene so the model sees world state before the term list; a bridging instruction asks it to prefer adjectives already in the scene or vocabulary before proposing new ones.
+
 **Mockup:**
 
 ```
@@ -20,19 +22,17 @@ Your job is to determine what happens in the world when the player takes an acti
 You must return ONLY valid JSON. No prose outside the JSON structure.
 You must return exactly the fields described below and nothing else.
 
-AUTHORITATIVE SOURCE: [rules about MCP data, entity list, exits, vocabulary, etc.]
+The entities, exits, and adjectives listed below are the authoritative world state. Do not infer or invent entities not listed. You are encouraged to flesh out story and scenery—atmospheric detail, sensory description, narrative flourish—within those bounds.
 
-VOCABULARY (adjectives and their rules):
-[<array of {adjective, rule_description} for current vocab>]
-
-You MUST apply each adjective's rule_description when deciding what happens. …
+CRITICAL — THE ENTITY LIST IS EXHAUSTIVE: [rules: don't invent locations/people/objects, bold = entities, exits, node_impacts format, adjectives from vocabulary, scenery, literal actions, state changes, etc.]
 
 CURRENT SCENE:
 Location: [<location node_id>] — [<location name>]
 Description: [<location description>]
 Location adjectives: [<location adjectives>]
 
-ENTITIES PRESENT: [<exhaustive list: location, NPCs, objects with node_id, location_id, adjectives, descriptions; DARK SCENE note if applicable>]
+ENTITIES PRESENT (authoritative world state for this turn; exhaustive — do not add any person or object not listed here): [<exhaustive list: NPCs, objects with node_id, location_id, adjectives, descriptions; DARK SCENE note if applicable>]
+[<containment rule if applicable>]
 
 PLAYER:
 - node_id: player | location_id: [<current location_id>] | adjectives: [<player adjectives>]
@@ -41,6 +41,13 @@ PLAYER:
 
 EXITS FROM THIS LOCATION: [<label [direction] -> target per exit>]
 
+Prefer adjectives that already appear in the scene above or in the list below; propose new adjectives only when no existing term fits.
+
+VOCABULARY (adjectives and their rules):
+[<array of {adjective, rule_description} for current vocab>]
+
+You MUST apply each adjective's rule_description when deciding what happens. …
+
 RECENT NARRATION: [<last few exchanges for tone/consistency>]
 
 Check: does the recent narration describe anything inconsistent with the current world state above? …
@@ -48,7 +55,7 @@ Check: does the recent narration describe anything inconsistent with the current
 PLAYER ACTION: [<exact player command>]
 [<optional blocks: DESCRIBE-ONLY / MOVEMENT — DO NOT REVERSE / DESTINATION / CONTAINMENT / etc.>]
 
-CRITICAL — node_impacts: You MUST include exactly one entry for each of these node_ids: [<required node_ids>]. …
+CRITICAL — node_impacts: ENTITIES PRESENT above is the world state (what exists). Your node_impacts must include exactly one entry for each of these node_ids: [<required node_ids>]. No other node_ids. …
 
 Return ONLY this JSON structure:
 {
