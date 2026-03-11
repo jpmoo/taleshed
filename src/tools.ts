@@ -18,6 +18,8 @@ import {
   isEngineCoveredByDefinition,
   filterEngineCoveredAdjectives,
   isTransientOrNarrativeOnlyByDefinition,
+  isTransientOrNarrativeOnlyByTerm,
+  isLocationOrContainmentOnlyByTerm,
   filterTransientAdjectives,
   debugLog,
 } from "./ollama.js";
@@ -118,11 +120,22 @@ export async function handleUpdateNodeAdjectives(
     const resolveMap = await resolveRedundantAdjectives(candidatesNotInVocab, vocabulary);
     adjectives = [...new Set(adjectives.map((a) => resolveMap.get(a.toLowerCase()) ?? a))];
   }
-  /* For adjectives not in vocab, fetch definitions and strip any that are engine-covered before writing to node. */
+  /* For adjectives not in vocab, reject location-only and non-substantive terms, then fetch definitions and strip any that are engine-covered. */
   const missing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
-  let vocabToInsert: { adjective: string; rule_description: string }[] = [];
   if (missing.length > 0) {
-    const definitionsForMissing = await fetchAdjectiveDefinitions(missing, vocabulary, "update_node_adjectives");
+    const rejectBeforeDef = new Set<string>();
+    for (const term of missing) {
+      if (await isTransientOrNarrativeOnlyByTerm(term)) rejectBeforeDef.add(term.toLowerCase());
+      else if (await isLocationOrContainmentOnlyByTerm(term)) rejectBeforeDef.add(term.toLowerCase());
+    }
+    if (rejectBeforeDef.size > 0) {
+      adjectives = adjectives.filter((a) => !rejectBeforeDef.has(a.toLowerCase()));
+    }
+  }
+  const stillMissing = adjectives.filter((a) => !vocabLower.has(a.toLowerCase()));
+  let vocabToInsert: { adjective: string; rule_description: string }[] = [];
+  if (stillMissing.length > 0) {
+    const { definitions: definitionsForMissing, requestedToCanonical } = await fetchAdjectiveDefinitions(stillMissing, vocabulary, "update_node_adjectives");
     const rejectedNew = new Set<string>();
     for (const d of definitionsForMissing) {
       if (!d.adjective) continue;
@@ -134,7 +147,11 @@ export async function handleUpdateNodeAdjectives(
       if (!covered && !transient) vocabToInsert.push({ adjective: d.adjective, rule_description: d.rule_description || "(No description)" });
     }
     if (rejectedNew.size > 0) {
-      adjectives = adjectives.filter((a) => !rejectedNew.has(a.toLowerCase()));
+      adjectives = adjectives.filter((a) => !rejectedNew.has((requestedToCanonical.get(a.toLowerCase()) ?? a).toLowerCase()));
+    }
+    /* Normalize to canonical adjectives (e.g. "copying a manuscript" -> "copied") when model suggested a better term. */
+    if (requestedToCanonical.size > 0) {
+      adjectives = [...new Set(adjectives.map((a) => requestedToCanonical.get(a.toLowerCase()) ?? a))];
     }
   }
   const currentAdj = parseAdjectives(node.adjectives);

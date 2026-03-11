@@ -34,6 +34,8 @@ import {
   isEngineCoveredByDefinition,
   filterEngineCoveredAdjectives,
   isTransientOrNarrativeOnlyByDefinition,
+  isTransientOrNarrativeOnlyByTerm,
+  isLocationOrContainmentOnlyByTerm,
   filterTransientAdjectives,
   debugLog,
   type SceneContext,
@@ -570,7 +572,7 @@ function expandPlayerCommandAbbreviations(playerCommand: string): string {
   return abbrevs[cmd] ?? playerCommand.trim();
 }
 
-/** Build inventory-only prose for "i" / "inventory" short-circuit. Lists only items with location_id player; no LLM. */
+/** Build inventory-only prose for "i" / "inventory" short-circuit. Lists only items with location_id = player (getPlayerInventory). No LLM; response is authoritative for what the player is carrying. */
 function buildInventoryProse(ctx: SceneContext): string {
   if (!ctx.inventoryNodeIds.length) {
     return "You are carrying nothing.";
@@ -622,7 +624,7 @@ export async function takeTurn(
   const destinationScene =
     destTarget != null ? assembleDestinationScene(db, destTarget, ctx.location.node_id) : null;
 
-  /* Inventory short-circuit: never call the LLM for "i" or "inventory". Return only what the player is carrying (location_id: player); no state changes. */
+  /* Inventory short-circuit: never call the LLM for "i" or "inventory". The server response is authoritative and lists only nodes with location_id = player (getPlayerInventory). The client/game model must rely on this response. No state changes. */
   const cmdLower = playerCommand.trim().toLowerCase();
   if (cmdLower === "i" || cmdLower === "inventory") {
     const inventoryProse = buildInventoryProse(ctx);
@@ -912,8 +914,29 @@ export async function takeTurn(
       if (t && !vocabLower.has(t)) stillNotInVocab.add(t);
     }
   }
+  /* Reject candidate terms with no substantive game impact (e.g. "copying a manuscript") or location-only (e.g. "in cellar") before fetching definitions. */
   if (stillNotInVocab.size > 0) {
-    const defs = await fetchAdjectiveDefinitions([...stillNotInVocab], vocabulary, "turn");
+    const rejectBeforeDef = new Set<string>();
+    for (const term of stillNotInVocab) {
+      if (await isTransientOrNarrativeOnlyByTerm(term)) rejectBeforeDef.add(term.toLowerCase());
+      else if (await isLocationOrContainmentOnlyByTerm(term)) rejectBeforeDef.add(term.toLowerCase());
+    }
+    for (const t of rejectBeforeDef) stillNotInVocab.delete(t);
+    if (rejectBeforeDef.size > 0) {
+      for (const [, entry] of impactByNode) {
+        entry.adjectives_new = entry.adjectives_new.filter(
+          (a) => !rejectBeforeDef.has(String(a).trim().toLowerCase())
+        );
+      }
+    }
+  }
+  /* Store definitions from impact path so backfill can reuse them and avoid duplicate fetchAdjectiveDefinitions. */
+  let definitionsFromImpact: { adjective: string; rule_description: string }[] = [];
+  const requestedToCanonicalFromImpact = new Map<string, string>();
+  if (stillNotInVocab.size > 0) {
+    const { definitions: defs, requestedToCanonical } = await fetchAdjectiveDefinitions([...stillNotInVocab], vocabulary, "turn");
+    definitionsFromImpact = defs;
+    for (const [k, v] of requestedToCanonical) requestedToCanonicalFromImpact.set(k, v);
     const rejectedNew = new Set<string>();
     for (const d of defs) {
       if (!d.adjective || !d.rule_description) continue;
@@ -925,15 +948,36 @@ export async function takeTurn(
     }
     if (rejectedNew.size > 0) {
       for (const [, entry] of impactByNode) {
-        entry.adjectives_new = entry.adjectives_new.filter(
-          (a) => !rejectedNew.has(String(a).trim().toLowerCase())
-        );
+        entry.adjectives_new = entry.adjectives_new.filter((a) => {
+          const key = String(a).trim().toLowerCase();
+          const canonical = (requestedToCanonical.get(key) ?? key).toLowerCase();
+          return !rejectedNew.has(canonical);
+        });
+      }
+    }
+    /* Normalize requested terms to canonical adjectives (e.g. "copying a manuscript" -> "copied" when model suggests it). */
+    if (requestedToCanonical.size > 0) {
+      for (const [, entry] of impactByNode) {
+        entry.adjectives_new = entry.adjectives_new.map((a) => {
+          const key = String(a).trim().toLowerCase();
+          const canonical = requestedToCanonical.get(key);
+          return canonical ?? a.trim();
+        });
+        entry.adjectives_new = [...new Set(entry.adjectives_new)];
       }
     }
   }
+  /* Run engine-covered and transient filters once per unique adjective set to avoid redundant Ollama/cache work. */
+  const filterResultByKey = new Map<string, string[]>();
   for (const [, entry] of impactByNode) {
-    entry.adjectives_new = await filterEngineCoveredAdjectives(entry.adjectives_new, vocabulary);
-    entry.adjectives_new = await filterTransientAdjectives(entry.adjectives_new, vocabulary);
+    const key = JSON.stringify([...entry.adjectives_new].map((a) => String(a).trim().toLowerCase()).sort());
+    let filtered = filterResultByKey.get(key);
+    if (filtered === undefined) {
+      filtered = await filterEngineCoveredAdjectives(entry.adjectives_new, vocabulary);
+      filtered = await filterTransientAdjectives(filtered, vocabulary);
+      filterResultByKey.set(key, filtered);
+    }
+    entry.adjectives_new = filtered;
   }
 
   /* Do not persist phantom takes: if we stripped new_location_id for an object (player didn't say take), overwrite prose_impact so history doesn't claim the player holds it. */
@@ -1075,7 +1119,13 @@ export async function takeTurn(
               );
             }
           } else {
-            updateWorldGraphLocation(db, node_id, resolvedId);
+            if (resolvedId === node_id) {
+              console.warn(
+                `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: cannot move a node to itself (would make it invisible).`
+              );
+            } else {
+              updateWorldGraphLocation(db, node_id, resolvedId);
+            }
           }
         }
       }
@@ -1118,7 +1168,22 @@ export async function takeTurn(
   const vocabLowerAfter = new Set(vocabularyAfter.map((v) => v.adjective.toLowerCase()));
   const missing = [...adjectivesInTurn].filter((a) => !vocabLowerAfter.has(a.toLowerCase()));
   if (missing.length > 0) {
-    const definitions = await fetchAdjectiveDefinitions(missing, vocabularyAfter);
+    /* Reuse definitions already fetched in the impact path to avoid duplicate fetchAdjectiveDefinitions. */
+    const defsByCanonical = new Map<string, { adjective: string; rule_description: string }>(
+      definitionsFromImpact.map((d) => [d.adjective.trim().toLowerCase(), d])
+    );
+    const needToFetch = missing.filter((m) => {
+      const canonical = (requestedToCanonicalFromImpact.get(m.toLowerCase()) ?? m).toLowerCase();
+      return !defsByCanonical.has(canonical);
+    });
+    const definitions = [...definitionsFromImpact.filter((d) => {
+      const canonical = d.adjective.trim().toLowerCase();
+      return missing.some((m) => (requestedToCanonicalFromImpact.get(m.toLowerCase()) ?? m).toLowerCase() === canonical);
+    })];
+    if (needToFetch.length > 0) {
+      const { definitions: extra } = await fetchAdjectiveDefinitions(needToFetch, vocabularyAfter);
+      definitions.push(...extra);
+    }
     if (definitions.length > 0) {
       const toInsert: { adjective: string; rule_description: string }[] = [];
       for (const d of definitions) {

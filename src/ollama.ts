@@ -98,7 +98,7 @@ Your job is to determine what happens in the world when the player takes an acti
 You must return ONLY valid JSON. No prose outside the JSON structure.
 You must return exactly the fields described below and nothing else.
 
-AUTHORITATIVE SOURCE: The data in this prompt (CURRENT SCENE, ENTITIES PRESENT, EXITS, VOCABULARY, PLAYER, etc.) is provided via MCP and is authoritative for world state and rules: what exists, where things are, what the player can do, object/location state (lit, closed, etc.), and vocabulary meanings. Use only that data for physics and ground rules. You are encouraged to flesh out story and scenery—atmospheric detail, sensory description, narrative flourish—within those bounds; MCP gives the facts, you bring the world to life in prose.
+The entities, exits, and adjectives listed below are the authoritative world state. Do not infer or invent entities not listed. You are encouraged to flesh out story and scenery—atmospheric detail, sensory description, narrative flourish—within those bounds.
 
 CRITICAL — THE ENTITY LIST IS EXHAUSTIVE:
 - Do not invent new locations, rooms, doors, exits, or passages. Only the location and entities explicitly listed in CURRENT SCENE exist.
@@ -150,7 +150,9 @@ function buildSectionB(vocabulary: VocabularyItem[]): string {
   const vocabJson = JSON.stringify(
     vocabulary.map((v) => ({ adjective: v.adjective, rule_description: v.rule_description }))
   );
-  return `VOCABULARY (adjectives and their rules):
+  return `Prefer adjectives that already appear in the scene above or in the list below; propose new adjectives only when no existing term fits.
+
+VOCABULARY (adjectives and their rules):
 ${vocabJson}
 
 You MUST apply each adjective's rule_description when deciding what happens. The rules are authoritative—follow what each rule_description says. For example: if a rule says something provides light or illuminates, treat that as a light source where relevant; if it blocks passage or interaction until a key or action, treat it as blocking; if it describes an NPC's disposition, let that guide their behavior; if it describes object or location state, apply that. When assigning adjectives to nodes, use only vocabulary terms (or new terms the engine will define). Represent \"no longer X\" by omitting X from adjectives_new, not by adding a negation (e.g. do not add \"unlit\" or \"unlocked\").`;
@@ -167,7 +169,7 @@ Location: ${loc.node_id} — ${loc.name}
 Description: ${locationDescription}
 Location adjectives: ${JSON.stringify(adj)}
 
-ENTITIES PRESENT (this list is exhaustive — do not add any person or object not listed here). Only things in **bold** in the Location Description and in entity descriptions above are entities; everything else in those descriptions is scenery, not in this list. These are the only people and objects the player can take, use, talk to, or otherwise affect this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present. (The player may still interact with scenery—atmospheric detail, non-bold text—for narrative-only actions like sitting or leaning, with no world-state impact.) Your narrative_prose MUST mention each of these: the location and every entity below. Every NPC in this list must be named and described in your narrative—do not skip or omit any character. Where an entity line shows "contains: X", follow the CONTAINMENT RULE after this list—state what is inside; never describe that container as empty. For each object, mention the object itself (e.g. "the torch") so the player can take or use it. If an object is listed here (e.g. torch_01), the room HAS that object: never say it is absent or missing.
+ENTITIES PRESENT (authoritative world state for this turn; exhaustive — do not add any person or object not listed here). Only things in **bold** in the Location Description and in entity descriptions above are entities; everything else in those descriptions is scenery, not in this list. These are the only people and objects the player can take, use, talk to, or otherwise affect this turn: they are in the player's current location or inside a not-closed container here. Anyone or anything in another location is not present. (The player may still interact with scenery—atmospheric detail, non-bold text—for narrative-only actions like sitting or leaning, with no world-state impact.) Your narrative_prose MUST mention each of these: the location and every entity below. Every NPC in this list must be named and described in your narrative—do not skip or omit any character. Where an entity line shows "contains: X", follow the CONTAINMENT RULE after this list—state what is inside; never describe that container as empty. For each object, mention the object itself (e.g. "the torch") so the player can take or use it. If an object is listed here (e.g. torch_01), the room HAS that object: never say it is absent or missing.
 `;
   if (ctx.darkActive) {
     out += `DARK SCENE (no light source): There are no entities visible. You MUST describe ONLY impenetrable darkness and the single visible exit (the way they entered). Do NOT describe the room, any objects, any other exits, or any detail—the scene cannot support that; the player sees nothing.\n`;
@@ -196,7 +198,7 @@ ENTITIES PRESENT (this list is exhaustive — do not add any person or object no
   }
   const hasContainers = containedBy.size > 0;
   if (hasContainers) {
-    out += `\nCONTAINMENT RULE (mandatory): Entities above that show "contains: X" have X inside them. In narrative_prose you MUST state what is inside (e.g. "the bracket holds the torch", "an unlit torch sits in the bracket"). FORBIDDEN for those containers: "empty", "an empty bracket", "empty torch bracket", "no torch rests in it", "waiting", "waiting for flame", "expectant", "nothing in it", "bare", "vacant". Do not describe a container that has "contains:" as empty in any wording—state what is inside (e.g. "the bracket holds the torch"). Containers and their contents have separate descriptions: never apply the contained object's description or state to the container (e.g. do not give the bracket the torch's "dried tow" or "waiting for flame"), and never apply the container's description to the contents. Each entity is described only by its own line in ENTITIES PRESENT. The "contains" field is authoritative—ignore any base_description that could suggest otherwise.\n`;
+    out += `\nCONTAINMENT RULE (mandatory): Entities above that show "contains: X" have X inside them. The "contains" and location_id fields are authoritative: if torch_01 has location_id: bracket_01 and bracket_01 shows contains: torch_01, the torch IS in the bracket—never say the bracket is empty, the torch is missing/invisible, or that the bracket contains nothing. In narrative_prose you MUST state what is inside (e.g. "the bracket holds the torch", "an unlit torch sits in the bracket"). FORBIDDEN for those containers: "empty", "an empty bracket", "empty torch bracket", "no torch rests in it", "waiting", "waiting for flame", "expectant", "nothing in it", "bare", "vacant", "containing nothing". Do not describe a container that has "contains:" as empty in any wording—state what is inside. Containers and their contents have separate descriptions: never apply the contained object's description or state to the container, and never apply the container's description to the contents. Each entity is described only by its own line in ENTITIES PRESENT.\n`;
   }
   out += `\nPLAYER:\n`;
   const playerAdj = Array.isArray(ctx.player.adjectives) ? ctx.player.adjectives : [];
@@ -326,11 +328,11 @@ PUT IN CONTAINER: When the player puts an object into a container (e.g. "put the
 GIVE TO NPC: NPCs do not take the player's items unless the player explicitly gives (e.g. "give carrot to Ciaran"). If the player only offers or mentions the item, do NOT set that object's new_location_id to the NPC; the item stays in inventory.
 Reminder: Literal actions only; offers/questions do not perform the action; objects do not change state on their own or when taken.
 ${movementReminder}${exitLine}${destinationLine}
-CRITICAL — node_impacts: You MUST include exactly one entry for each of these node_ids: ${requiredNodeIds}. No other node_ids. If the player targeted someone/something not present, action fails but node_impacts still lists every id above. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only vocabulary terms for persistent state (disposition, lit/closed). Never add transient or narrative-only phrases (e.g. "noticed looking up", "observed")—use prose_impact for those. When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For NPCs, retain all dispositional adjectives (guarded, hostile, etc.) when adding physical or other adjectives—do not replace disposition with appearance. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
+CRITICAL — node_impacts: ENTITIES PRESENT above is the world state (what exists). Your node_impacts must include exactly one entry for each of these node_ids: ${requiredNodeIds}. No other node_ids. If the player targeted someone/something not present, action fails but node_impacts still lists every id above. For each entry: adjectives_old = that node's current adjectives from CURRENT SCENE or Inventory; adjectives_new = state after this turn. Use only vocabulary terms for persistent state (disposition, lit/closed). Never add transient or narrative-only phrases (e.g. "noticed looking up", "observed")—use prose_impact for those. When your narrative describes an NPC or object state change (e.g. NPC warms up), set adjectives_new to match or the engine will not update. For NPCs, retain all dispositional adjectives (guarded, hostile, etc.) when adding physical or other adjectives—do not replace disposition with appearance. For start, look, examine, or movement-only (no interaction with an NPC or object): set adjectives_new equal to adjectives_old for every node. No other change → adjectives_new equal to adjectives_old. Never use [] for a node that has adjectives unless explicitly clearing. Use reconciliation_notes if you see a mismatch (e.g. "Narrative showed Ciaran warming up; I should have updated ciaran adjectives_new").
 
 Return ONLY this JSON structure:
 {
-  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), then EVERY exit (at least label and direction for each; destination optional—e.g. battered door east; steps down); then what happened. Never omit an NPC, object, or exit. If 'Containment in this scene' appears above, those containers are NOT empty—state what is inside each. Never describe a listed container as empty. Any object marked [UNLIT] or with no 'lit' in adjectives (e.g. torch, candle) must be described as unlit—never as burning, lit, or providing light.>",
+  "narrative_prose": "<string: describe location, EVERY entity (name each NPC and mention each object), then EVERY exit (at least label and direction for each; destination optional—e.g. battered door east; steps down); then what happened. Never omit an NPC, object, or exit. If 'Containment in this scene' or 'contains: X' appears above, those containers have X inside—say so (e.g. 'the bracket holds the torch'); never say the container is empty or the object is missing/invisible. Any object marked [UNLIT] or with no 'lit' in adjectives (e.g. torch, candle) must be described as unlit—never as burning, lit, or providing light.>",
   "action_result": "<success | failure | partial>",
   "node_impacts": [
     {
@@ -353,8 +355,8 @@ export function assemblePrompt(
 ): string {
   const sections = [
     buildSectionA(),
-    buildSectionB(ctx.vocabulary),
     buildSectionC(ctx),
+    buildSectionB(ctx.vocabulary),
     buildSectionD(recentHistory),
     buildSectionE(ctx, playerCommand, ctx.locationExits ?? [], destinationScene),
   ];
@@ -378,7 +380,7 @@ function parseYesNoResponse(
   if (!raw) return false;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const val = parsed.answer ?? parsed.response ?? parsed.Yes ?? parsed.yes;
+    const val = parsed.answer ?? parsed.Answer ?? parsed.response ?? parsed.Yes ?? parsed.yes;
     const s = String(val ?? "").trim().toUpperCase();
     return s === "YES";
   } catch {
@@ -466,6 +468,75 @@ export async function filterEngineCoveredAdjectives(
 
 /** Cache: adjective (lowercase) -> whether it is transient/narrative-only (momentary action or observation, not persistent game state). */
 const transientAdjectiveCache = new Map<string, boolean>();
+const transientByTermCache = new Map<string, boolean>();
+const locationOnlyByTermCache = new Map<string, boolean>();
+
+/**
+ * Returns true if this phrase describes only where something is located or placed (e.g. "in cellar", "in kitchen", "in inventory").
+ * Location and containment are tracked by the engine (location_id), not by adjectives. Result is cached by term (lowercase).
+ */
+export async function isLocationOrContainmentOnlyByTerm(term: string): Promise<boolean> {
+  const key = String(term).trim().toLowerCase();
+  if (!key) return false;
+  const cached = locationOnlyByTermCache.get(key);
+  if (cached !== undefined) {
+    if (DEBUG) debugLog("location-only-by-term check (cached)", `term: ${term} -> locationOnly: ${cached}`);
+    return cached;
+  }
+  const prompt = `Answer with only YES or NO.
+
+Does the following phrase describe ONLY where something is located or placed (e.g. "in cellar", "in kitchen", "in inventory", "on table", "in the scriptorium")? The game engine tracks location and containment; such phrases must NOT be used as adjectives. If the phrase is purely a location or placement, answer YES.
+
+Phrase: ${term}
+
+Answer:`;
+  try {
+    if (DEBUG) debugLog("location-only-by-term check request", `term: ${term}`);
+    const responseText = await callOllama(prompt, "location-only-by-term check");
+    const yes = parseYesNoResponse(responseText, "location-only-by-term check", term, DEBUG);
+    locationOnlyByTermCache.set(key, yes);
+    if (DEBUG) debugLog("location-only-by-term check result", `term: ${term} -> locationOnly: ${yes}`);
+    return yes;
+  } catch (err) {
+    locationOnlyByTermCache.set(key, false);
+    if (DEBUG) debugLog("location-only-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not location-only`);
+    return false;
+  }
+}
+
+/**
+ * Returns true if this phrase (a candidate adjective not yet in vocabulary) describes only a momentary action,
+ * one-off observation, or something with no substantive impact on game state/flow. Used to reject terms like
+ * "copying a manuscript" before we try to define them. Result is cached by term (lowercase).
+ */
+export async function isTransientOrNarrativeOnlyByTerm(term: string): Promise<boolean> {
+  const key = String(term).trim().toLowerCase();
+  if (!key) return false;
+  const cached = transientByTermCache.get(key);
+  if (cached !== undefined) {
+    if (DEBUG) debugLog("transient-by-term check (cached)", `term: ${term} -> transient: ${cached}`);
+    return cached;
+  }
+  const prompt = `Answer with only YES or NO.
+
+Does the following phrase describe ONLY a momentary action, one-off observation, or something with NO substantive impact on game state or flow (e.g. "copying a manuscript", "looking up", "noticed", "currently observing")? Substantive impact = persistent disposition (guarded, hostile), object/location state (lit, closed, locked), or other qualities that last and affect future turns. If the phrase is just an activity or fleeting moment with no lasting game effect, answer YES.
+
+Phrase: ${term}
+
+Answer:`;
+  try {
+    if (DEBUG) debugLog("transient-by-term check request", `term: ${term}`);
+    const responseText = await callOllama(prompt, "transient-by-term check");
+    const yes = parseYesNoResponse(responseText, "transient-by-term check", term, DEBUG);
+    transientByTermCache.set(key, yes);
+    if (DEBUG) debugLog("transient-by-term check result", `term: ${term} -> transient: ${yes}`);
+    return yes;
+  } catch (err) {
+    transientByTermCache.set(key, false);
+    if (DEBUG) debugLog("transient-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
+    return false;
+  }
+}
 
 /**
  * Returns true if this adjective's rule describes only a momentary action, one-off observation, or transient state
@@ -759,17 +830,25 @@ Return ONLY the JSON object. No other text.`;
  * Second call: fetch definitions for adjectives that appeared in the turn but are not in vocabulary.
  * Uses existing vocabulary so new terms can be defined in relation to them (e.g. "less guarded" given "guarded").
  * Definitions must be generic and transportable (apply to any node: location, object, NPC).
- * Returns array of { adjective, rule_description }; on parse failure or error returns [] so the turn is not broken.
+ * Returns { definitions, requestedToCanonical }. definitions = array to insert/check; requestedToCanonical maps each
+ * requested term (lowercase) to the canonical adjective to use (may be the model's suggestion, e.g. "copied" for "copying a manuscript").
+ * On parse failure or error returns { definitions: [], requestedToCanonical: new Map() } so the turn is not broken.
  */
+export type FetchAdjectiveDefinitionsResult = {
+  definitions: { adjective: string; rule_description: string }[];
+  requestedToCanonical: Map<string, string>;
+};
+
 export async function fetchAdjectiveDefinitions(
   adjectives: string[],
   existingVocabulary: { adjective: string; rule_description: string }[],
   callSource?: string,
   allowFallback = true
-): Promise<{ adjective: string; rule_description: string }[]> {
-  if (adjectives.length === 0) return [];
+): Promise<FetchAdjectiveDefinitionsResult> {
+  const empty = { definitions: [], requestedToCanonical: new Map<string, string>() };
+  if (adjectives.length === 0) return empty;
   const terms = [...new Set(adjectives)].map((a) => a.trim()).filter(Boolean);
-  if (terms.length === 0) return [];
+  if (terms.length === 0) return empty;
   const logLabel = callSource ? `vocabulary definitions (${callSource})` : "vocabulary definitions";
   const vocabBlock =
     existingVocabulary.length > 0
@@ -780,7 +859,7 @@ export async function fetchAdjectiveDefinitions(
 
 ${vocabBlock}Define each NEW term below. For each term, provide exactly one sentence (rule_description) describing what this state means for the game. If a new term relates to an existing one above (e.g. "less guarded" given "guarded"), base the definition on that.
 
-CRITICAL: The "adjective" field in each object must be exactly one of the terms listed in NEW TERMS TO DEFINE—copy the term word-for-word. Do not substitute a synonym or different phrasing.
+Prefer copying the term word-for-word in the "adjective" field. If a term is verbose or action-like (e.g. "copying a manuscript"), you MAY return a shorter canonical adjective (e.g. "copied") that best captures the persistent state; the engine will use your adjective.
 
 CRITICAL: You MUST return one object for EVERY term. There are ${terms.length} terms below. Your response must be a JSON array containing exactly ${terms.length} objects—one per term. Returning only one object or fewer than ${terms.length} is wrong.
 
@@ -813,34 +892,57 @@ Return ONLY a JSON array with one object per term. No other text. Example format
       }
     }
     const termsLowerSet = new Set(terms.map((t) => t.trim().toLowerCase()));
-    const result = items
+    const parsedItems = items
       .map((x) => ({
         adjective: typeof x.adjective === "string" ? String(x.adjective).trim() : "",
         rule_description: typeof x.rule_description === "string" ? String(x.rule_description).trim() : "",
       }))
-      .filter((x) => x.adjective.length > 0)
-      .filter((r) => termsLowerSet.has(r.adjective.toLowerCase()))
-      .map((r) => ({
-        adjective: terms.find((t) => t.trim().toLowerCase() === r.adjective.toLowerCase())!.trim(),
-        rule_description: r.rule_description,
-      }));
-    // If the model returned fewer definitions than terms (or returned wrong adjectives), fetch each missing term in its own request.
-    const definedLower = new Set(result.map((r) => r.adjective.toLowerCase()));
-    const missing = terms.filter((t) => !definedLower.has(t.trim().toLowerCase()));
+      .filter((x) => x.adjective.length > 0);
+
+    const result: { adjective: string; rule_description: string }[] = [];
+    const requestedToCanonical = new Map<string, string>();
+
+    // Exact matches: response adjective is one of the requested terms
+    const matchedTermIndices = new Set<number>();
+    for (const r of parsedItems) {
+      const idx = terms.findIndex((t) => t.trim().toLowerCase() === r.adjective.toLowerCase());
+      if (idx !== -1) {
+        matchedTermIndices.add(idx);
+        const canonical = terms[idx]!.trim();
+        result.push({ adjective: canonical, rule_description: r.rule_description });
+        requestedToCanonical.set(canonical.toLowerCase(), canonical);
+      }
+    }
+
+    // Pair unconsumed response items (model suggested a different adjective) with terms that have no definition yet
+    const missingIndices = terms.map((_, i) => i).filter((i) => !matchedTermIndices.has(i));
+    const unconsumed = parsedItems.filter((r) => !termsLowerSet.has(r.adjective.toLowerCase()));
+    for (let i = 0; i < missingIndices.length && i < unconsumed.length; i++) {
+      const term = terms[missingIndices[i]!]!.trim();
+      const item = unconsumed[i]!;
+      result.push({ adjective: item.adjective, rule_description: item.rule_description });
+      requestedToCanonical.set(term.toLowerCase(), item.adjective);
+    }
+
+    const missing = terms.filter((t) => !requestedToCanonical.has(t.trim().toLowerCase()));
+
     if (allowFallback && missing.length > 0) {
       if (DEBUG) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing one-by-one: ${missing.join(", ")}`);
-      const extra: { adjective: string; rule_description: string }[] = [];
       for (const term of missing) {
         const one = await fetchAdjectiveDefinitions([term], existingVocabulary, callSource, false);
-        const match = one.find((r) => r.adjective.toLowerCase() === term.trim().toLowerCase());
-        if (match) extra.push({ adjective: term.trim(), rule_description: match.rule_description });
+        const def = one.definitions[0];
+        if (def) {
+          result.push({ adjective: def.adjective, rule_description: def.rule_description });
+          requestedToCanonical.set(term.trim().toLowerCase(), def.adjective);
+        }
+        for (const [k, v] of one.requestedToCanonical) requestedToCanonical.set(k, v);
       }
-      return [...result, ...extra];
     }
-    return result;
+
+    return { definitions: result, requestedToCanonical };
   } catch (err) {
     if (DEBUG) debugLog("fetchAdjectiveDefinitions error", err instanceof Error ? err.message : String(err));
-    return [];
+    return empty;
   }
 }
 
