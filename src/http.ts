@@ -58,6 +58,7 @@ try {
     appendLog(ERROR_LOG, startupLine);
   } catch (_) {}
 }
+process.env.TALESHED_ERROR_LOG = ERROR_LOG;
 process.stderr.write(`[TaleShed] Log file: ${ERROR_LOG}\n`);
 if (DEBUG) {
   process.stderr.write(`[TaleShed] DEBUG=1: logging Claude request bodies and Ollama prompts/responses to ${ERROR_LOG}\n`);

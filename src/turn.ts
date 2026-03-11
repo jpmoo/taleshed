@@ -23,9 +23,12 @@ import {
   resolveLocationNodeId,
 } from "./db/database.js";
 import type { WorldNode } from "./db/schema.js";
+import fs from "fs";
 import {
   runMistralTurn,
   checkOllamaReachable,
+  OLLAMA_MODEL,
+  type OllamaCheckResult,
   fetchAdjectiveDefinitions,
   resolveRedundantAdjectives,
   isEngineCoveredByDefinition,
@@ -39,6 +42,9 @@ import {
   type MistralResponse,
   type VocabularyItem,
 } from "./ollama.js";
+
+/** Cached result of the first Ollama reachability check; reused on subsequent turns. */
+let cachedOllamaCheck: OllamaCheckResult | null = null;
 
 /** True if the player only offered or asked (did not give a command to perform the action). */
 function isOfferOrQuestion(playerCommand: string): boolean {
@@ -634,7 +640,28 @@ export async function takeTurn(
     };
   }
 
-  const ollamaCheck = await checkOllamaReachable();
+  let ollamaCheck: OllamaCheckResult;
+  if (cachedOllamaCheck !== null) {
+    ollamaCheck = cachedOllamaCheck;
+  } else {
+    ollamaCheck = await checkOllamaReachable();
+    cachedOllamaCheck = ollamaCheck;
+    const debugLogOllama = process.env.TALESHED_DEBUG === "1" || process.env.TALESHED_DEBUG === "true";
+    if (debugLogOllama && process.env.TALESHED_ERROR_LOG) {
+      const msg = ollamaCheck.ok
+        ? "Ollama connection: OK"
+        : ollamaCheck.error === "model_not_found"
+          ? "Ollama connection: FAILED (model not found)"
+          : "Ollama connection: FAILED (unreachable)";
+      const withModel = `${msg} (model: ${OLLAMA_MODEL})`;
+      try {
+        fs.appendFileSync(
+          process.env.TALESHED_ERROR_LOG,
+          `[${new Date().toISOString()}] [DEBUG] ${withModel}\n`
+        );
+      } catch (_) {}
+    }
+  }
   if (!ollamaCheck.ok) {
     if (ollamaCheck.error === "model_not_found") {
       return {
