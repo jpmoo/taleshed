@@ -931,6 +931,30 @@ export async function takeTurn(
     entry.adjectives_new = await filterTransientAdjectives(entry.adjectives_new, vocabulary);
   }
 
+  /* Do not persist phantom takes: if we stripped new_location_id for an object (player didn't say take), overwrite prose_impact so history doesn't claim the player holds it. */
+  const anyTakeApplied = Array.from(impactByNode.entries()).some(
+    ([nid, e]) => nid !== "player" && nid !== locationNodeId && e.new_location_id === "player"
+  );
+  for (const [node_id, entry] of impactByNode) {
+    if (node_id !== "player" && node_id !== locationNodeId) {
+      if (
+        String(entry.prose_impact ?? "").trim().toLowerCase() === TAKE_PROSE_IMPACT.toLowerCase() &&
+        entry.new_location_id !== "player"
+      ) {
+        entry.prose_impact = "No change.";
+      }
+    } else if (node_id === "player") {
+      const pro = String(entry.prose_impact ?? "").trim();
+      if (
+        !anyTakeApplied &&
+        (pro.toLowerCase().startsWith(TAKE_NARRATIVE_PHRASE.toLowerCase()) ||
+          /\b(holds?|holding|carries?|carrying)\s+(the\s+)?(torch|key|item)/i.test(pro))
+      ) {
+        entry.prose_impact = "No change.";
+      }
+    }
+  }
+
   const ledgerEntries = Array.from(impactByNode.entries()).map(([node_id, entry]) => ({
     timestamp: now,
     action_description: actionDescription,

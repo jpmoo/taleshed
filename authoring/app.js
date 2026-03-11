@@ -423,9 +423,9 @@
       var loc = locations[i];
       var p = pos.get(loc.node_id);
       if (p != null) {
-        loc.grid_x = p.x;
-        loc.grid_y = p.y;
-        loc.grid_z = p.z;
+        loc.grid_x = Math.round(p.x);
+        loc.grid_y = Math.round(p.y);
+        loc.grid_z = Math.round(p.z);
       } else {
         loc.grid_x = hasPlaced ? maxX + edgeOffset + fallback * edgeOffset : fallback * edgeOffset;
         loc.grid_y = 0;
@@ -1376,9 +1376,9 @@
     document.getElementById("edit-location_id").value = node.location_id ?? "";
     document.getElementById("edit-is_active").checked = !!node.is_active;
     document.getElementById("edit-meta").value = node.meta ?? "";
-    document.getElementById("edit-grid_x").value = node.grid_x ?? "";
-    document.getElementById("edit-grid_y").value = node.grid_y ?? "";
-    document.getElementById("edit-grid_z").value = node.grid_z ?? "";
+    document.getElementById("edit-grid_x").value = node.grid_x != null ? String(Math.round(Number(node.grid_x))) : "";
+    document.getElementById("edit-grid_y").value = node.grid_y != null ? String(Math.round(Number(node.grid_y))) : "";
+    document.getElementById("edit-grid_z").value = node.grid_z != null ? String(Math.round(Number(node.grid_z))) : "";
     if (node.node_type === "location") {
       document.getElementById("exits-section").classList.remove("hidden");
       renderExitsList(node.exits, node.node_id);
@@ -1483,19 +1483,19 @@
         const v = document.getElementById("edit-grid_x").value;
         if (v === "") return null;
         const n = parseFloat(v);
-        return isNaN(n) ? null : n;
+        return isNaN(n) ? null : Math.round(n);
       })(),
       grid_y: (function () {
         const v = document.getElementById("edit-grid_y").value;
         if (v === "") return null;
         const n = parseFloat(v);
-        return isNaN(n) ? null : n;
+        return isNaN(n) ? null : Math.round(n);
       })(),
       grid_z: (function () {
         const v = document.getElementById("edit-grid_z").value;
         if (v === "") return null;
         const n = parseFloat(v);
-        return isNaN(n) ? null : n;
+        return isNaN(n) ? null : Math.round(n);
       })(),
       exits: exitsJson,
     };
