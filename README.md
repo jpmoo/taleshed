@@ -6,7 +6,7 @@ Interactive fiction engine over the [Model Context Protocol](https://modelcontex
 
 - **MCP server** (Node.js): exposes three tools — `take_turn`, `bookmark`, `restore_to_bookmark`.
 - **Ollama** (local): Mistral 7B via `http://localhost:11434` for world reasoning and narrative output.
-- **SQLite**: one database file with `world_graph`, `history_ledger`, and `vocabulary`.
+- **SQLite**: one database file with `world_graph`, `history_ledger`, and `vocabulary`. Vocabulary is seeded at setup and can grow at runtime when the model proposes new adjectives that pass engine checks (transient and location-only terms are rejected).
 - **Claude** (external): player-facing LLM; calls MCP tools and narrates from the returned prose.
 
 ## Requirements
@@ -115,6 +115,8 @@ Click a location to edit all fields in a modal; Save updates, Delete removes the
 ## Spec reference
 
 See `TaleShed_MCP_Spec_v0.1.pdf` in this repo for full data model, turn pipeline, Ollama prompt structure, and error handling.
+
+For a concise rundown of every LLM call (turn, resolve, definition fetch, engine/transient checks, backfill), see [docs/LLM_CALLS_RUNDOWN.md](docs/LLM_CALLS_RUNDOWN.md).
 
 ## License
 
