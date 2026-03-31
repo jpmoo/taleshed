@@ -169,6 +169,73 @@ function isGiveToNpcCommand(
   return hasObject && hasNpc;
 }
 
+/** Verb pattern only — used to infer put-in-container when the model omits new_location_id. */
+function isPutInContainerCommandPattern(playerCommand: string): boolean {
+  const cmd = playerCommand.trim().toLowerCase();
+  return (
+    /\b(put|place|set|mount|stick)\s+.+\s+(in\s+to?|into)\s+/.test(cmd) ||
+    /\b(put|place|set|mount)\s+.+\s+in\s+/.test(cmd)
+  );
+}
+
+/**
+ * Resolve a movement target for objects: exact node_id, then entities in scene/inventory (name or id stem), then locations.
+ * Without this, new_location_id "bracket" or "Bracket_01" fails getNode and resolveLocationNodeId (locations only) — the move is never applied.
+ */
+function resolveEntityNodeIdInScene(db: Database.Database, raw: string, ctx: SceneContext): string | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  const direct = getNode(db, t);
+  if (direct) return direct.node_id;
+  const lower = t.toLowerCase();
+  const candidates = [...ctx.entities, ...(ctx.inventoryEntities ?? [])];
+  for (const e of candidates) {
+    if (e.node_id.toLowerCase() === lower) return e.node_id;
+  }
+  for (const e of candidates) {
+    if (!e.name?.trim()) continue;
+    const nml = e.name.trim().toLowerCase().replace(/^(the|a|an)\s+/, "");
+    if (nml === lower) return e.node_id;
+    const parts = nml.split(/\s+/).filter((w) => w.length >= 2);
+    if (parts.includes(lower)) return e.node_id;
+  }
+  for (const e of candidates) {
+    const stem = e.node_id.replace(/_?\d*$/, "").toLowerCase();
+    if (stem.length >= 2 && stem === lower) return e.node_id;
+  }
+  return resolveLocationNodeId(db, t);
+}
+
+/** When the command clearly puts one inventory item into one room object, return that pair (mirrors drop fallback). */
+function inferPutInContainerMove(
+  db: Database.Database,
+  playerCommand: string,
+  ctx: SceneContext,
+  locationNodeId: string
+): { objectNodeId: string; containerNodeId: string } | null {
+  if (!isPutInContainerCommandPattern(playerCommand)) return null;
+  const invIds = ctx.inventoryNodeIds ?? [];
+  if (invIds.length === 0) return null;
+  const containerEntities = ctx.entities.filter(
+    (e) => e.node_type === "object" && e.node_id !== locationNodeId
+  );
+  if (containerEntities.length === 0) return null;
+
+  const matches: { objectNodeId: string; containerNodeId: string }[] = [];
+  for (const objectNodeId of invIds) {
+    const invObj =
+      ctx.inventoryEntities?.find((x) => x.node_id === objectNodeId) ?? getNode(db, objectNodeId);
+    const objName = invObj && "name" in invObj ? (invObj as { name?: string }).name : undefined;
+    for (const cont of containerEntities) {
+      if (isPutInContainerCommand(playerCommand, objectNodeId, objName, cont.node_id, cont.name)) {
+        matches.push({ objectNodeId, containerNodeId: cont.node_id });
+      }
+    }
+  }
+  if (matches.length !== 1) return null;
+  return matches[0];
+}
+
 /** Remove from narrative any phrase that says the player holds, carries, or took the given object (so returned prose is consistent with stripped object moves). */
 function sanitizeNarrativeStrippedTakes(
   narrative: string,
@@ -552,6 +619,22 @@ function assembleSceneContext(db: Database.Database): SceneContext | null {
   };
 }
 
+/** Scene IDs for MCP clients: location, room entities, inventory, player — stable order, each id once (location may also appear in entities). */
+function buildSceneNodeIds(ctx: SceneContext): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const push = (id: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    ordered.push(id);
+  };
+  push(ctx.location.node_id);
+  for (const e of ctx.entities) push(e.node_id);
+  for (const id of ctx.inventoryNodeIds) push(id);
+  push("player");
+  return ordered;
+}
+
 /** Expand single-token abbreviations for the player command. Only expands when the whole command is exactly the abbreviation. */
 function expandPlayerCommandAbbreviations(playerCommand: string): string {
   const cmd = playerCommand.trim().toLowerCase();
@@ -628,12 +711,7 @@ export async function takeTurn(
   const cmdLower = playerCommand.trim().toLowerCase();
   if (cmdLower === "i" || cmdLower === "inventory") {
     const inventoryProse = buildInventoryProse(ctx);
-    const scene_node_ids = [
-      ctx.location.node_id,
-      ...ctx.entities.map((e) => e.node_id),
-      ...ctx.inventoryNodeIds,
-      "player",
-    ];
+    const scene_node_ids = buildSceneNodeIds(ctx);
     return {
       result: "success",
       prose: inventoryProse,
@@ -868,7 +946,10 @@ export async function takeTurn(
     if (node_id === "player" || node_id === locationNodeId) continue;
     if (entry.new_location_id == null || entry.new_location_id === "player") continue;
     if (!ctx.inventoryNodeIds.includes(node_id)) continue;
-    const targetId = String(entry.new_location_id).trim();
+    const targetIdRaw = String(entry.new_location_id).trim();
+    const resolvedT = resolveEntityNodeIdInScene(db, targetIdRaw, ctx);
+    const targetId = resolvedT ?? targetIdRaw;
+    if (resolvedT) entry.new_location_id = resolvedT;
     if (targetId === locationNodeId) continue; /* drop to room: keep */
     const targetEntity = ctx.entities.find((e) => e.node_id === targetId);
     if (targetEntity) {
@@ -879,11 +960,21 @@ export async function takeTurn(
       const objName = objEntity && "name" in objEntity ? (objEntity as { name?: string }).name : undefined;
       const containerName = targetEntity.node_type === "object" ? targetEntity.name : undefined;
       const npcName = targetEntity.node_type === "npc" ? targetEntity.name : undefined;
-      if (targetEntity.node_type === "object" && isPutInContainerCommand(playerCommand, node_id, objName, targetId, containerName)) continue; /* put in container: keep */
+      if (targetEntity.node_type === "object" && isPutInContainerCommand(playerCommand, node_id, objName, targetId, containerName))
+        continue; /* put in container: keep */
       if (targetEntity.node_type === "npc" && isGiveToNpcCommand(playerCommand, node_id, objName, targetId, npcName)) continue; /* give to NPC: keep */
       entry.new_location_id = undefined; /* e.g. model had NPC "take" carrot without explicit give: item stays in inventory */
     } else {
       entry.new_location_id = locationNodeId; /* target not in scene (e.g. hearth when elsewhere): drop to room */
+    }
+  }
+
+  /* Model often omits or misnames new_location_id for put-in-container; resolveLocationNodeId never finds containers — infer a single clear object+container pair. */
+  const putInferred = inferPutInContainerMove(db, playerCommand, ctx, locationNodeId);
+  if (putInferred) {
+    const ent = impactByNode.get(putInferred.objectNodeId);
+    if (ent && ctx.inventoryNodeIds.includes(putInferred.objectNodeId)) {
+      ent.new_location_id = putInferred.containerNodeId;
     }
   }
 
@@ -1087,12 +1178,10 @@ export async function takeTurn(
             raw.toLowerCase() === "player_inventory" || raw === playerNodeId;
           const resolvedId = isPlayerInventory
             ? playerNodeId
-            : getNode(db, raw)
-              ? raw
-              : resolveLocationNodeId(db, raw);
+            : resolveEntityNodeIdInScene(db, raw, ctx) ?? resolveLocationNodeId(db, raw);
           if (!resolvedId) {
             console.warn(
-              `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: no such location in world_graph (model may have invented a location).`
+              `[TaleShed] Ignoring new_location_id "${raw}" for ${node_id}: no matching entity or location in world_graph (model may have invented a target).`
             );
           } else if (node.node_type === "player") {
             const targetNode = getNode(db, resolvedId);
@@ -1217,12 +1306,9 @@ export async function takeTurn(
     prose = ensureExitsInProse(prose, ctx.locationExits ?? []);
   }
 
-  const scene_node_ids = [
-    ctx.location.node_id,
-    ...ctx.entities.map((e) => e.node_id),
-    ...ctx.inventoryNodeIds,
-    "player",
-  ];
+  /* After ledger/world updates, re-read scene so scene_node_ids matches DB (e.g. torch no longer in inventory after put-in-container). */
+  const ctxAfter = assembleSceneContext(db);
+  const scene_node_ids = buildSceneNodeIds(ctxAfter ?? ctx);
   return {
     result: mistralResponse.action_result,
     prose,
