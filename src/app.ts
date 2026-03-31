@@ -12,6 +12,7 @@ import {
   handleListBookmarks,
   handleRestoreToBookmark,
   handleUpdateNodeAdjectives,
+  handleVersion,
 } from "./tools.js";
 
 const MAX_SUGGESTED_HISTORY_CHARS = 2800;
@@ -55,6 +56,20 @@ export function createTaleshedServer(db: Database.Database): McpServer {
   const server = new McpServer(
     { name: "taleshed", version: "0.1.0" },
     { capabilities: { tools: {} } }
+  );
+
+  server.registerTool(
+    "version",
+    {
+      title: "Version",
+      description:
+        "Returns TaleShed build/version information: package semver and the timestamp of the latest git commit (committer date, ISO 8601)—a practical stand-in for last push when the server runs from a clone. No parameters.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const out = handleVersion();
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
   );
 
   server.registerTool(

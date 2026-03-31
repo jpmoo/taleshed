@@ -79,7 +79,7 @@ function isTakeOnlyCommand(playerCommand: string): boolean {
   return takeVerb && !stateChangeVerb;
 }
 
-/** True only when the player's command explicitly takes this object (e.g. "take torch", "get the torch"). Used to block model from moving objects to player when the player said something else. */
+/** True when the command looks like an explicit take of this object (e.g. "take torch"). Used to force-take when the model omitted new_location_id and for take-only adjective rules—not to reject dialogue- or narrative-warranted transfers. */
 function isTakeCommandForObject(playerCommand: string, nodeId: string, entityName?: string): boolean {
   const cmd = playerCommand.trim().toLowerCase();
   const takeVerb =
@@ -253,6 +253,15 @@ function sanitizeNarrativeStrippedTakes(
       new RegExp(`,\\s*who\\s+now\\s+holds?\\s+${obj}[\\s.]*`, "gi"),
       new RegExp(`\\s+[Yy]ou\\s+hold\\s+${obj}[\\s.]*`, "gi"),
       new RegExp(`\\s+[Yy]ou\\s+(?:have|took|picked\\s+up|carry)\\s+${obj}[\\s.]*`, "gi"),
+      /* "You reach over and take the torch ..." — model often narrates take without a take command; \bYou\b avoids matching "your". */
+      new RegExp(
+        `\\b[Yy]ou\\b[^.]*?\\b(?:take|takes|taking)\\s+(?:the\\s+)?(?:unlit\\s+|lit\\s+)?${esc}[^.]*\\.`,
+        "gi"
+      ),
+      new RegExp(
+        `\\b[Yy]ou\\b[^.]*?\\b(?:get|gets|getting)\\s+(?:the\\s+)?(?:unlit\\s+|lit\\s+)?${esc}[^.]*\\.`,
+        "gi"
+      ),
       new RegExp(`\\s+(?:[Tt]he\\s+)?${obj}\\s+(?:is\\s+)?(?:now\\s+)?in\\s+your\\s+hand[s]?[\\s.]*`, "gi"),
       new RegExp(`\\s+with\\s+${obj}\\s+in\\s+(?:your\\s+)?hand[s]?[\\s.]*`, "gi"),
     ];
@@ -320,6 +329,12 @@ const CARDINAL_AND_ORDINAL_DIRECTIONS = [
   "up",
   "down",
 ] as const;
+
+/** True if the command plausibly includes taking, receiving, or giving an object (not only movement). Used so compound "go through door and take torch" is not treated as pure movement for stripping. */
+function hasObjectTransferIntentInCommand(playerCommand: string): boolean {
+  const t = playerCommand.trim();
+  return /\b(take|get|grab|pick\s+up|give|hand)\b/i.test(t);
+}
 
 /** True if the command is purely a movement attempt (direction word, "go north", "leave", etc.). */
 function isMovementCommand(playerCommand: string): boolean {
@@ -872,27 +887,26 @@ export async function takeTurn(
     const playerEntry = impactByNode.get("player");
     if (playerEntry) playerEntry.new_location_id = undefined;
   }
-  /* Only allow moving an object to the player when the player's command explicitly took that object (e.g. "take torch"). Block model from putting objects in hand on "apologize", "look", etc. */
+  /* Object → player: trust the model when it sets new_location_id (explicit take, dialogue, NPC gives, "I'll fetch light," etc.). Strip only on **pure movement** (east, go through door—no take/get/give in the same command) so "east" cannot move inventory; compound "go through … and take …" keeps model-set takes. Describe-only and offer/question already cleared new_location_id above. */
   const strippedObjectEntities: { node_id: string; name?: string }[] = [];
-  for (const [node_id, entry] of impactByNode) {
-    if (node_id === "player" || node_id === locationNodeId) continue;
-    if (entry.new_location_id !== "player") continue;
-    const entity = ctx.entities.find((e) => e.node_id === node_id);
-    const nodeForName = entity ? undefined : getNode(db, node_id);
-    const name = entity?.name ?? nodeForName?.name;
-    if (!isTakeCommandForObject(playerCommand, node_id, name)) {
+  if (isMovementCommand(playerCommand) && destTarget != null && !hasObjectTransferIntentInCommand(playerCommand)) {
+    for (const [node_id, entry] of impactByNode) {
+      if (node_id === "player" || node_id === locationNodeId) continue;
+      if (entry.new_location_id !== "player") continue;
       entry.new_location_id = undefined;
+      const entity = ctx.entities.find((e) => e.node_id === node_id);
+      const nodeForName = entity ? undefined : getNode(db, node_id);
+      const name = entity?.name ?? nodeForName?.name;
       strippedObjectEntities.push({ node_id, name });
     }
   }
-  /* When the player took only the contents (e.g. "take torch"), do not also take the container. Strip new_location_id from any container whose contained object was the one explicitly taken. */
+  /* When the player took only the contents (e.g. took torch from bracket), do not also take the container. Strip new_location_id from any container whose contained object moved to the player. */
   for (const [node_id, entry] of impactByNode) {
     if (entry.new_location_id !== "player" || node_id === "player" || node_id === locationNodeId) continue;
     const contents = getEntitiesInLocation(db, node_id);
     const playerTookAContained = contents.some((c) => {
       const e = impactByNode.get(c.node_id);
-      if (e?.new_location_id !== "player") return false;
-      return isTakeCommandForObject(playerCommand, c.node_id, c.name);
+      return e?.new_location_id === "player";
     });
     if (playerTookAContained) {
       entry.new_location_id = undefined;

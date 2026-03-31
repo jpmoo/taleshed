@@ -23,6 +23,7 @@ import {
   filterTransientAdjectives,
   debugLog,
 } from "./ollama.js";
+import { getTaleshedVersionInfo, type TaleshedVersionInfo } from "./version.js";
 
 export interface TakeTurnArgs {
   player_command: string;
@@ -190,6 +191,10 @@ export async function handleUpdateNodeAdjectives(
 
 export function handleTakeTurn(db: Database.Database, args: TakeTurnArgs): Promise<TakeTurnOutput> {
   return takeTurnWithRetry(db, args.player_command, args.recent_history ?? "");
+}
+
+export function handleVersion(): TaleshedVersionInfo {
+  return getTaleshedVersionInfo();
 }
 
 export interface BookmarkArgs {
