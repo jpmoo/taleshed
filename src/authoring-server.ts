@@ -6,6 +6,7 @@
  * Access: http://localhost:PORT/?api=YOUR_API_KEY
  */
 
+import "dotenv/config";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";

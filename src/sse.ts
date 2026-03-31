@@ -6,6 +6,7 @@
  * Use when your client only supports HTTP+SSE or Streamable HTTP is unreliable.
  */
 
+import "dotenv/config";
 import { createMcpExpressApp, SSEServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";

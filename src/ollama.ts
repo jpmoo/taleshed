@@ -6,23 +6,29 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isTaleshedDebugEnabled } from "./env.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEBUG_LOG_PATH = path.join(__dirname, "..", "taleshed-errors.log");
-const DEBUG =
-  process.env["TALESHED_DEBUG"] === "1" || process.env["TALESHED_DEBUG"] === "true";
 
 export function debugLog(label: string, payload: string) {
-  if (!DEBUG) return;
+  if (!isTaleshedDebugEnabled()) return;
   const line = `[${new Date().toISOString()}] [DEBUG] ${label}\n${payload}\n`;
   try {
     fs.appendFileSync(DEBUG_LOG_PATH, line);
   } catch (_) {}
 }
 
-const OLLAMA_BASE = process.env["OLLAMA_BASE"] ?? "http://localhost:11434";
-/** Model name used for Ollama generate calls; exported so startup log can show it when DEBUG=1. */
-export const OLLAMA_MODEL = process.env["OLLAMA_MODEL"] ?? "mistral-nemo";
+/** Ollama API base URL — read at call time so `.env` is applied even if this module loaded before dotenv. */
+function getOllamaBase(): string {
+  return (process.env["OLLAMA_BASE"] ?? "http://localhost:11434").trim();
+}
+
+/** Model name for `/api/generate` — read at call time so `.env` is applied reliably. */
+export function getOllamaModel(): string {
+  return (process.env["OLLAMA_MODEL"] ?? "mistral-nemo").trim();
+}
+
 const OLLAMA_TIMEOUT_MS = 30_000;
 
 export interface VocabularyItem {
@@ -493,7 +499,7 @@ export async function isEngineCoveredByDefinition(
   if (!key) return false;
   const cached = engineCoveredCache.get(key);
   if (cached !== undefined) {
-    if (DEBUG) debugLog("engine-covered check (cached)", `adjective: ${adjective} -> engine_covered: ${cached}`);
+    if (isTaleshedDebugEnabled()) debugLog("engine-covered check (cached)", `adjective: ${adjective} -> engine_covered: ${cached}`);
     return cached;
   }
   const rule = String(ruleDescription).trim() || "(no description)";
@@ -506,19 +512,19 @@ Rule: ${rule}
 
 Answer:`;
   try {
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       debugLog("engine-covered check request", `adjective: ${adjective}\nrule: ${rule}`);
     }
     const responseText = await callOllama(prompt, "engine-covered check");
-    const yes = parseYesNoResponse(responseText, "engine-covered check", adjective, DEBUG);
+    const yes = parseYesNoResponse(responseText, "engine-covered check", adjective, isTaleshedDebugEnabled());
     engineCoveredCache.set(key, yes);
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       debugLog("engine-covered check result", `adjective: ${adjective}\nraw response: ${responseText || "(empty)"}\nengine_covered: ${yes}`);
     }
     return yes;
   } catch (err) {
     engineCoveredCache.set(key, false);
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       debugLog("engine-covered check error", `${adjective}: ${err instanceof Error ? err.message : String(err)} -> treating as not covered`);
     }
     return false;
@@ -547,7 +553,7 @@ export async function filterEngineCoveredAdjectives(
     const covered = await isEngineCoveredByDefinition(v.adjective, v.rule_description);
     if (!covered) result.push(a);
   }
-  if (DEBUG) {
+  if (isTaleshedDebugEnabled()) {
     const removed = adjectives.filter((a) => !result.includes(a));
     debugLog(
       "filterEngineCoveredAdjectives",
@@ -571,7 +577,7 @@ export async function isLocationOrContainmentOnlyByTerm(term: string): Promise<b
   if (!key) return false;
   const cached = locationOnlyByTermCache.get(key);
   if (cached !== undefined) {
-    if (DEBUG) debugLog("location-only-by-term check (cached)", `term: ${term} -> locationOnly: ${cached}`);
+    if (isTaleshedDebugEnabled()) debugLog("location-only-by-term check (cached)", `term: ${term} -> locationOnly: ${cached}`);
     return cached;
   }
   const prompt = `Answer with only YES or NO.
@@ -582,15 +588,15 @@ Phrase: ${term}
 
 Answer:`;
   try {
-    if (DEBUG) debugLog("location-only-by-term check request", `term: ${term}`);
+    if (isTaleshedDebugEnabled()) debugLog("location-only-by-term check request", `term: ${term}`);
     const responseText = await callOllama(prompt, "location-only-by-term check");
-    const yes = parseYesNoResponse(responseText, "location-only-by-term check", term, DEBUG);
+    const yes = parseYesNoResponse(responseText, "location-only-by-term check", term, isTaleshedDebugEnabled());
     locationOnlyByTermCache.set(key, yes);
-    if (DEBUG) debugLog("location-only-by-term check result", `term: ${term} -> locationOnly: ${yes}`);
+    if (isTaleshedDebugEnabled()) debugLog("location-only-by-term check result", `term: ${term} -> locationOnly: ${yes}`);
     return yes;
   } catch (err) {
     locationOnlyByTermCache.set(key, false);
-    if (DEBUG) debugLog("location-only-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not location-only`);
+    if (isTaleshedDebugEnabled()) debugLog("location-only-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not location-only`);
     return false;
   }
 }
@@ -605,7 +611,7 @@ export async function isTransientOrNarrativeOnlyByTerm(term: string): Promise<bo
   if (!key) return false;
   const cached = transientByTermCache.get(key);
   if (cached !== undefined) {
-    if (DEBUG) debugLog("transient-by-term check (cached)", `term: ${term} -> transient: ${cached}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-by-term check (cached)", `term: ${term} -> transient: ${cached}`);
     return cached;
   }
   const prompt = `Answer with only YES or NO.
@@ -616,15 +622,15 @@ Phrase: ${term}
 
 Answer:`;
   try {
-    if (DEBUG) debugLog("transient-by-term check request", `term: ${term}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-by-term check request", `term: ${term}`);
     const responseText = await callOllama(prompt, "transient-by-term check");
-    const yes = parseYesNoResponse(responseText, "transient-by-term check", term, DEBUG);
+    const yes = parseYesNoResponse(responseText, "transient-by-term check", term, isTaleshedDebugEnabled());
     transientByTermCache.set(key, yes);
-    if (DEBUG) debugLog("transient-by-term check result", `term: ${term} -> transient: ${yes}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-by-term check result", `term: ${term} -> transient: ${yes}`);
     return yes;
   } catch (err) {
     transientByTermCache.set(key, false);
-    if (DEBUG) debugLog("transient-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-by-term check error", `${term}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
     return false;
   }
 }
@@ -642,7 +648,7 @@ export async function isTransientOrNarrativeOnlyByDefinition(
   if (!key) return false;
   const cached = transientAdjectiveCache.get(key);
   if (cached !== undefined) {
-    if (DEBUG) debugLog("transient-adjective check (cached)", `adjective: ${adjective} -> transient: ${cached}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-adjective check (cached)", `adjective: ${adjective} -> transient: ${cached}`);
     return cached;
   }
   const rule = String(ruleDescription).trim() || "(no description)";
@@ -655,15 +661,15 @@ Rule: ${rule}
 
 Answer:`;
   try {
-    if (DEBUG) debugLog("transient-adjective check request", `adjective: ${adjective}\nrule: ${rule}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-adjective check request", `adjective: ${adjective}\nrule: ${rule}`);
     const responseText = await callOllama(prompt, "transient-adjective check");
-    const yes = parseYesNoResponse(responseText, "transient-adjective check", adjective, DEBUG);
+    const yes = parseYesNoResponse(responseText, "transient-adjective check", adjective, isTaleshedDebugEnabled());
     transientAdjectiveCache.set(key, yes);
-    if (DEBUG) debugLog("transient-adjective check result", `adjective: ${adjective}\nraw: ${responseText || "(empty)"}\ntransient: ${yes}`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-adjective check result", `adjective: ${adjective}\nraw: ${responseText || "(empty)"}\ntransient: ${yes}`);
     return yes;
   } catch (err) {
     transientAdjectiveCache.set(key, false);
-    if (DEBUG) debugLog("transient-adjective check error", `${adjective}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
+    if (isTaleshedDebugEnabled()) debugLog("transient-adjective check error", `${adjective}: ${err instanceof Error ? err.message : String(err)} -> treating as not transient`);
     return false;
   }
 }
@@ -689,7 +695,7 @@ export async function filterTransientAdjectives(
     const transient = await isTransientOrNarrativeOnlyByDefinition(v.adjective, v.rule_description);
     if (!transient) result.push(a);
   }
-  if (DEBUG) {
+  if (isTaleshedDebugEnabled()) {
     const removed = adjectives.filter((a) => !result.includes(a));
     debugLog(
       "filterTransientAdjectives",
@@ -701,17 +707,20 @@ export async function filterTransientAdjectives(
 
 export async function callOllama(prompt: string, logLabel?: string): Promise<string> {
   const label = logLabel ? ` (${logLabel})` : "";
-  if (DEBUG) {
-    debugLog(`Ollama request${label}`, `POST ${OLLAMA_BASE}/api/generate\nmodel: ${OLLAMA_MODEL}\n\n--- prompt ---\n${prompt}\n--- end prompt ---`);
+  if (isTaleshedDebugEnabled()) {
+    debugLog(
+      `Ollama request${label}`,
+      `POST ${getOllamaBase()}/api/generate\nmodel: ${getOllamaModel()}\n\n--- prompt ---\n${prompt}\n--- end prompt ---`
+    );
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+    const res = await fetch(`${getOllamaBase()}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model: getOllamaModel(),
         prompt,
         stream: false,
         format: "json",
@@ -721,22 +730,22 @@ export async function callOllama(prompt: string, logLabel?: string): Promise<str
     clearTimeout(timeout);
     if (!res.ok) {
       const text = await res.text();
-      if (DEBUG) debugLog(`Ollama response${label} (error)`, `${res.status} ${text}`);
+      if (isTaleshedDebugEnabled()) debugLog(`Ollama response${label} (error)`, `${res.status} ${text}`);
       throw new Error(`Ollama HTTP ${res.status}: ${text}`);
     }
     const data = (await res.json()) as { response?: string; error?: string };
     if (data.error) {
-      if (DEBUG) debugLog(`Ollama response${label} (error)`, data.error);
+      if (isTaleshedDebugEnabled()) debugLog(`Ollama response${label} (error)`, data.error);
       throw new Error(data.error);
     }
     const responseText = data.response ?? "";
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       debugLog(`Ollama response${label}`, responseText);
     }
     return responseText;
   } catch (err) {
     clearTimeout(timeout);
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       debugLog(
         `Ollama response${label} (exception)`,
         err instanceof Error ? err.message : String(err)
@@ -865,7 +874,7 @@ For each candidate: if it has the SAME meaning as an existing vocabulary term (t
 CRITICAL: Return a JSON object with one key per candidate. Keys must be the candidate terms exactly as written above. Values must be EITHER (1) an existing vocabulary term from the list—exact spelling—only when it is a true synonym, OR (2) the candidate itself unchanged. Example: {"content": "settled", "less_guarded": "less_guarded"} if "content" is a synonym for "settled" and "less_guarded" is a distinct state (not a synonym for "guarded").
 
 Return ONLY the JSON object. No other text.`;
-  if (DEBUG) {
+  if (isTaleshedDebugEnabled()) {
     debugLog(
       "resolveRedundantAdjectives request",
       `candidates: ${terms.join(", ")}\nvocabulary (${vocabList.length} terms): ${vocabList.join(", ")}`
@@ -874,7 +883,7 @@ Return ONLY the JSON object. No other text.`;
   const logLabel = "resolve redundant adjectives";
   try {
     const responseText = await callOllama(prompt, logLabel);
-    if (DEBUG) debugLog("resolveRedundantAdjectives reply (raw)", responseText);
+    if (isTaleshedDebugEnabled()) debugLog("resolveRedundantAdjectives reply (raw)", responseText);
     const objStr = extractJsonString(responseText);
     if (!objStr || !objStr.trimStart().startsWith("{")) return new Map();
     const parsed = JSON.parse(objStr) as Record<string, unknown>;
@@ -901,13 +910,13 @@ Return ONLY the JSON object. No other text.`;
         result.set(key, candidate.trim());
       }
     }
-    if (DEBUG) {
+    if (isTaleshedDebugEnabled()) {
       const summary = Object.fromEntries(result);
       debugLog("resolveRedundantAdjectives result", JSON.stringify(summary, null, 2));
     }
     return result;
   } catch (err) {
-    if (DEBUG) debugLog("resolveRedundantAdjectives error", err instanceof Error ? err.message : String(err));
+    if (isTaleshedDebugEnabled()) debugLog("resolveRedundantAdjectives error", err instanceof Error ? err.message : String(err));
     const fallback = new Map<string, string>();
     terms.forEach((c) => {
       const k = c.trim().toLowerCase();
@@ -957,7 +966,7 @@ CRITICAL: You MUST return one object for EVERY term. There are ${terms.length} t
 NEW TERMS TO DEFINE: ${termList}
 
 Return ONLY a JSON array with one object per term. No other text. Example format (use your actual terms, not these): [{"adjective": "dim", "rule_description": "Location has low light; sight-based actions may be harder."}, {"adjective": "tense", "rule_description": "Atmosphere is charged with conflict or unease; NPCs may be quick to react."}]`;
-  if (DEBUG) {
+  if (isTaleshedDebugEnabled()) {
     debugLog(
       `fetchAdjectiveDefinitions request${callSource ? ` (${callSource})` : ""}`,
       `terms: ${termList}\nexisting vocabulary count: ${existingVocabulary.length}`
@@ -1018,7 +1027,7 @@ Return ONLY a JSON array with one object per term. No other text. Example format
     const missing = terms.filter((t) => !requestedToCanonical.has(t.trim().toLowerCase()));
 
     if (allowFallback && missing.length > 0) {
-      if (DEBUG) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing one-by-one: ${missing.join(", ")}`);
+      if (isTaleshedDebugEnabled()) debugLog("fetchAdjectiveDefinitions", `Got ${result.length}/${terms.length} definitions; fetching missing one-by-one: ${missing.join(", ")}`);
       for (const term of missing) {
         const one = await fetchAdjectiveDefinitions([term], existingVocabulary, callSource, false);
         const def = one.definitions[0];
@@ -1032,7 +1041,7 @@ Return ONLY a JSON array with one object per term. No other text. Example format
 
     return { definitions: result, requestedToCanonical };
   } catch (err) {
-    if (DEBUG) debugLog("fetchAdjectiveDefinitions error", err instanceof Error ? err.message : String(err));
+    if (isTaleshedDebugEnabled()) debugLog("fetchAdjectiveDefinitions error", err instanceof Error ? err.message : String(err));
     return empty;
   }
 }
@@ -1110,11 +1119,11 @@ export type OllamaCheckResult =
 /** Verifies Ollama is reachable and OLLAMA_MODEL exists in the local model list. */
 export async function checkOllamaReachable(): Promise<OllamaCheckResult> {
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { method: "GET" });
+    const res = await fetch(`${getOllamaBase()}/api/tags`, { method: "GET" });
     if (!res.ok) return { ok: false, error: "unreachable" };
     const data = (await res.json()) as { models?: { name: string }[] };
     const models = data?.models ?? [];
-    const want = OLLAMA_MODEL.trim();
+    const want = getOllamaModel();
     const found = models.some(
       (m) => m.name === want || m.name.startsWith(want + ":")
     );

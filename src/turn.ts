@@ -24,10 +24,11 @@ import {
 } from "./db/database.js";
 import type { WorldNode } from "./db/schema.js";
 import fs from "fs";
+import { isTaleshedDebugEnabled } from "./env.js";
 import {
   runMistralTurn,
   checkOllamaReachable,
-  OLLAMA_MODEL,
+  getOllamaModel,
   type OllamaCheckResult,
   fetchAdjectiveDefinitions,
   resolveRedundantAdjectives,
@@ -741,14 +742,13 @@ export async function takeTurn(
   } else {
     ollamaCheck = await checkOllamaReachable();
     cachedOllamaCheck = ollamaCheck;
-    const debugLogOllama = process.env.TALESHED_DEBUG === "1" || process.env.TALESHED_DEBUG === "true";
-    if (debugLogOllama && process.env.TALESHED_ERROR_LOG) {
+    if (isTaleshedDebugEnabled() && process.env.TALESHED_ERROR_LOG) {
       const msg = ollamaCheck.ok
         ? "Ollama connection: OK"
         : ollamaCheck.error === "model_not_found"
           ? "Ollama connection: FAILED (model not found)"
           : "Ollama connection: FAILED (unreachable)";
-      const withModel = `${msg} (model: ${OLLAMA_MODEL})`;
+      const withModel = `${msg} (model: ${getOllamaModel()})`;
       try {
         fs.appendFileSync(
           process.env.TALESHED_ERROR_LOG,

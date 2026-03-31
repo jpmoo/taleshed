@@ -5,12 +5,14 @@
  * Claude and other remote clients connect via URL, e.g. http://localhost:3000/mcp
  */
 
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createMcpExpressApp, StreamableHTTPServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";
+import { isTaleshedDebugEnabled } from "./env.js";
 
 // Log next to project root (parent of dist/), not cwd, so it works from systemd/any cwd
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,7 +33,7 @@ function logError(label: string, err: unknown) {
   }
   console.error("[TaleShed]", label, err);
 }
-const DEBUG = process.env["TALESHED_DEBUG"] === "1" || process.env["TALESHED_DEBUG"] === "true";
+const DEBUG = isTaleshedDebugEnabled();
 function logRequest(method: string, url: string, req?: import("node:http").IncomingMessage & { headers?: Record<string, string | string[] | undefined> }) {
   let line = `[${new Date().toISOString()}] ${method} ${url}\n`;
   if (DEBUG && req?.headers) {
