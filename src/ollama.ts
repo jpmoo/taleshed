@@ -160,6 +160,77 @@ ${vocabJson}
 You MUST apply each adjective's rule_description when deciding what happens. The rules are authoritative—follow what each rule_description says. For example: if a rule says something provides light or illuminates, treat that as a light source where relevant; if it blocks passage or interaction until a key or action, treat it as blocking; if it describes an NPC's disposition, let that guide their behavior; if it describes object or location state, apply that. When assigning adjectives to nodes, use only vocabulary terms (or new terms the engine will define). Represent \"no longer X\" by omitting X from adjectives_new, not by adding a negation (e.g. do not add \"unlit\" or \"unlocked\").`;
 }
 
+/** Matches torch/candle/lamp/taper in name or description (same rule as entity lines in CURRENT SCENE). */
+const LIGHT_CAPABLE_PATTERN = /\b(torch|candle|lamp|taper)\b/i;
+
+function entityIsLightCapableObject(e: SceneEntity): boolean {
+  return (
+    e.node_type === "object" &&
+    (LIGHT_CAPABLE_PATTERN.test(e.name) || LIGHT_CAPABLE_PATTERN.test(e.base_description ?? ""))
+  );
+}
+
+function entityHasLitAdjective(e: SceneEntity): boolean {
+  const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
+  return adjList.some((a) => String(a).trim().toLowerCase() === "lit");
+}
+
+/** True if any light-capable object in the scene or inventory has adjective "lit". */
+export function sceneHasLitLightSourceFromParts(
+  entities: SceneEntity[],
+  inventoryEntities?: SceneEntity[] | null
+): boolean {
+  for (const e of entities) {
+    if (entityIsLightCapableObject(e) && entityHasLitAdjective(e)) return true;
+  }
+  for (const e of inventoryEntities ?? []) {
+    if (entityIsLightCapableObject(e) && entityHasLitAdjective(e)) return true;
+  }
+  return false;
+}
+
+export function sceneHasLitLightSource(ctx: SceneContext): boolean {
+  return sceneHasLitLightSourceFromParts(ctx.entities, ctx.inventoryEntities);
+}
+
+/**
+ * Remove sentences that invent lighting when no entity is lit (model hallucination).
+ * When `destinationForNarrative` is set (movement arrival), uses that room's entities plus player inventory for the lit check.
+ */
+export function stripInventedLightingProse(
+  prose: string,
+  ctx: SceneContext,
+  destinationForNarrative?: DestinationScene | null
+): string {
+  const dark = destinationForNarrative?.darkActive ?? ctx.darkActive;
+  if (dark) return prose;
+  const entities = destinationForNarrative ? destinationForNarrative.entities : ctx.entities;
+  const inv = ctx.inventoryEntities;
+  if (sceneHasLitLightSourceFromParts(entities, inv)) return prose;
+
+  const entityBlob = entities.map((e) => `${e.node_id} ${e.name}`).join(" ");
+  const hasCandleEntity = /\bcandle\b/i.test(entityBlob);
+  const idx = prose.search(/\n\nExits:\s*/i);
+  const head = idx >= 0 ? prose.slice(0, idx) : prose;
+  const tail = idx >= 0 ? prose.slice(idx) : "";
+
+  const rawChunks = head.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [head];
+  const kept: string[] = [];
+  for (const chunk of rawChunks) {
+    const s = chunk.trim();
+    if (!s) continue;
+    const lower = s.toLowerCase();
+    if (/\b(dimly )?lit by\b/i.test(s) || /\billuminated by\b/i.test(s)) continue;
+    if (/\bcandle\b/i.test(s) && !hasCandleEntity) continue;
+    if (/\b(burning|flickering)\b/i.test(lower) && /\b(torch|candle|lamp|taper)\b/i.test(lower)) continue;
+    if (/\bglow(s|ing)?\b/i.test(lower) && /\b(candle|torch|lamp|taper)\b/i.test(lower)) continue;
+    kept.push(s);
+  }
+  if (kept.length === 0) return prose;
+  const joined = kept.join(" ").replace(/\s+/g, " ").trim();
+  return joined + tail;
+}
+
 function buildSectionC(ctx: SceneContext): string {
   const loc = ctx.location;
   const adj = Array.isArray(loc.adjectives) ? loc.adjectives : [];
@@ -185,14 +256,15 @@ ENTITIES PRESENT (authoritative world state for this turn; exhaustive — do not
       containedBy.set(locId, list);
     }
   }
-  const lightCapablePattern = /\b(torch|candle|lamp|taper)\b/i;
   for (const e of ctx.entities) {
     const adjList = Array.isArray(e.adjectives) ? e.adjectives : [];
     const locId = e.location_id ?? loc.node_id;
     const containsList = containedBy.get(e.node_id);
     const contains =
       containsList != null && containsList.length > 0 ? ` | contains: ${containsList.join(", ")}` : "";
-    const isLightCapable = e.node_type === "object" && (lightCapablePattern.test(e.name) || lightCapablePattern.test(e.base_description ?? ""));
+    const isLightCapable =
+      e.node_type === "object" &&
+      (LIGHT_CAPABLE_PATTERN.test(e.name) || LIGHT_CAPABLE_PATTERN.test(e.base_description ?? ""));
     const hasLit = adjList.some((a) => String(a).trim().toLowerCase() === "lit");
     const unlitHint = isLightCapable && !hasLit ? " [UNLIT—describe as unlit only; do NOT say burning, lit, or that it provides light]" : "";
     out += `- ${e.node_type} | ${e.node_id} | ${e.name} | location_id: ${locId} | adjectives: ${JSON.stringify(adjList)} | ${e.base_description}${contains}${unlitHint}\n`;
@@ -203,6 +275,11 @@ ENTITIES PRESENT (authoritative world state for this turn; exhaustive — do not
     out += `\nCONTAINMENT RULE (mandatory): Entities above that show "contains: X" have X inside them. The "contains" and location_id fields are authoritative: if torch_01 has location_id: bracket_01 and bracket_01 shows contains: torch_01, the torch IS in the bracket—never say the bracket is empty, the torch is missing/invisible, or that the bracket contains nothing. In narrative_prose you MUST state what is inside using the **contained node's** kind (e.g. "the bracket holds the torch", "an unlit torch in the bracket")—never substitute a different object type (e.g. do not say "candle" if contains: torch_01). FORBIDDEN for those containers: "empty", "an empty bracket", "empty torch bracket", "no torch rests in it", "waiting", "waiting for flame", "expectant", "nothing in it", "bare", "vacant", "containing nothing". Do not describe a container that has "contains:" as empty in any wording—state what is inside. Containers and their contents have separate descriptions: never apply the contained object's description or state to the container, and never apply the container's description to the contents. Each entity is described only by its own line in ENTITIES PRESENT.\n`;
   }
   if (!ctx.darkActive) {
+    const hasLit = sceneHasLitLightSource(ctx);
+    if (!hasLit) {
+      const noCandle = !ctx.entities.some((e) => /\bcandle\b/i.test(`${e.node_id} ${e.name}`));
+      out += `\n*** NO LIT LIGHT SOURCE (computed): No object in ENTITIES PRESENT or Inventory has a light-capable type (torch/candle/lamp/taper) with adjective "lit". Mandatory for narrative_prose: Do NOT write "the room is lit by", "dimly lit by", "illuminated by", "glow", "flickering", "burning", or place a candle, lamp, or flame on a desk, table, or shelf—even if the Location Description mentions a desk or table. There is no flame and no light from any object in this room.${noCandle ? ' Do NOT use the word "candle"—no candle entity exists in ENTITIES PRESENT.' : ""} Describe ambient light only (grey daylight, dim windows, shadow) or unlit objects only.\n`;
+    }
     out += `\nROOM LIGHTING (no invention): There is no brazier, hearth, wall torch, or extra lamp/candle in this room unless it appears as its **own** line in ENTITIES PRESENT above. Do NOT write "the room is lit by," "dimly lit by," or "flickering torch on a brazier" unless that exact entity exists in the list and its adjectives justify light. If no entity in the scene provides light, describe the room as dim, grey, or shadowed from windows/air—never invent a fire or burning light source.\n`;
   }
   out += `\nPLAYER:\n`;
@@ -326,8 +403,9 @@ function buildSectionE(
     !explicitTakeTorch
       ? `\n*** DIALOGUE / SPEECH: The player's input is spoken dialogue (not a bare movement command like "east" alone). **Object moves:** Set new_location_id to "player" (or from NPC to player) only when **warranted**—e.g. they ask for the item ("Give me that"), commit to fetching light and you resolve by taking the torch, or an NPC hands something over in your narrative. Do **not** narrate or encode taking/reaching with **no** warrant in their words or your resolution. **Persistent state:** Speech (praise, insults, threats, boasts, or anything else) may affect any entity when your narrative shows a **lasting** outcome—update adjectives_new using vocabulary terms. If no persistent change for an entity, keep adjectives_new equal to adjectives_old. ***\n\n`
       : "";
+  const hasLitScene = sceneHasLitLightSource(ctx);
   const describeOnlyBlock = !isOfferOrQuestion && isDescribeOnly
-    ? `\n*** DESCRIBE-ONLY (look / examine / l / x / start / begin): Do NOT change world state (no new_location_id; keep adjectives_new equal to adjectives_old for every node). Describe the FULL scene: location, every NPC, every object, every exit. **Do not substitute or invent objects:** use each entity's **exact** kind from ENTITIES PRESENT (if node_id is torch_01, it is a torch—not a candle, taper, or "light"). **Do not invent** braziers, hearths, sconces, or extra torches/candles/lamps. **Do not** describe the room as "lit by," "dimly lit by," "flickering," or "burning" from any source not in ENTITIES PRESENT; objects without "lit" in adjectives are unlit and **do not** cast light. Do not skip any character or object. ***\n\n`
+    ? `\n*** DESCRIBE-ONLY (look / examine / l / x / start / begin): Do NOT change world state (no new_location_id; keep adjectives_new equal to adjectives_old for every node). Describe the FULL scene: location, every NPC, every object, every exit. **Do not substitute or invent objects:** use each entity's **exact** kind from ENTITIES PRESENT (if node_id is torch_01, it is a torch—not a candle, taper, or "light"). **Do not invent** braziers, hearths, sconces, or extra torches/candles/lamps. **Do not** describe the room as "lit by," "dimly lit by," "flickering," or "burning" from any source not in ENTITIES PRESENT; objects without "lit" in adjectives are unlit and **do not** cast light. Do not skip any character or object.${hasLitScene ? "" : " **Computed:** No object has \"lit\" in adjectives—do NOT mention candles on furniture, \"dimly lit by\", or any burning or glowing light source."} ***\n\n`
     : "";
   const inventoryOnlyBlock = !isOfferOrQuestion && isDescribeOnly === false && isInventoryOnly
     ? `\n*** INVENTORY: The player asked for their inventory (e.g. "i" or "inventory"). Describe ONLY what the player is carrying—the items listed in the PLAYER/Inventory line above (location_id: player). Do NOT describe the location, ENTITIES PRESENT, exits, or anything else. List only those items. If Inventory is empty, say they are carrying nothing. Do NOT set new_location_id for any object or for the player. ***\n\n`

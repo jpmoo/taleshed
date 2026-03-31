@@ -38,6 +38,7 @@ import {
   isLocationOrContainmentOnlyByTerm,
   filterTransientAdjectives,
   debugLog,
+  stripInventedLightingProse,
   type SceneContext,
   type SceneEntity,
   type DestinationScene,
@@ -1309,6 +1310,13 @@ export async function takeTurn(
   let prose = mistralResponse.narrative_prose ?? "";
   if (narrativeTakeSanitizeEntities.length > 0 && prose) {
     prose = sanitizeNarrativeStrippedTakes(prose, narrativeTakeSanitizeEntities);
+  }
+  if (prose) {
+    const destForStrip =
+      isMovementCommand(playerCommand) && destTarget != null && destinationScene != null
+        ? destinationScene
+        : null;
+    prose = stripInventedLightingProse(prose, ctx, destForStrip);
   }
   /* When dark is active (no light), never show room description — force canonical darkness prose so the model cannot leak detail. */
   if (ctx.darkActive && !(isMovementCommand(playerCommand) && destTarget != null)) {
