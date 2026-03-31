@@ -26,9 +26,9 @@ cleanup() {
 trap cleanup EXIT TERM INT
 
 # Run from project root so dotenv finds .env
-"$NODE" -r dotenv/config dist/http.js &
+"$NODE" dist/http.js &
 HTTP_PID=$!
-"$NODE" -r dotenv/config dist/authoring-server.js &
+"$NODE" dist/authoring-server.js &
 AUTH_PID=$!
 
 # When the first child exits, kill the other and exit with that child's status

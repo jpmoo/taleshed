@@ -4,7 +4,7 @@
  * For URL-based access use: npm run start:http
  */
 
-import "dotenv/config";
+import "./load-env.js";
 import { StdioServerTransport } from "./sdk-shim.js";
 import { initDatabase, getDbPath } from "./db/schema.js";
 import { createTaleshedServer } from "./app.js";

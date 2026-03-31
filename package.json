@@ -6,14 +6,14 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node -r dotenv/config dist/http.js",
-    "start:http": "node -r dotenv/config dist/http.js",
-    "start:sse": "node -r dotenv/config dist/sse.js",
+    "start": "node dist/http.js",
+    "start:http": "node dist/http.js",
+    "start:sse": "node dist/sse.js",
     "start:stdio": "node dist/index.js",
-    "dev": "tsc && node -r dotenv/config dist/http.js",
+    "dev": "tsc && node dist/http.js",
     "seed": "node dist/seed.js",
     "db:init": "node dist/db/init.js",
-    "start:authoring": "node -r dotenv/config dist/authoring-server.js"
+    "start:authoring": "node dist/authoring-server.js"
   },
   "engines": {
     "node": ">=18"

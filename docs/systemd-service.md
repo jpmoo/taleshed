@@ -36,7 +36,7 @@ WorkingDirectory=/home/jpmoo/taleshed
 # Load .env from the project dir (TALESHED_PORT, etc.)
 EnvironmentFile=-/home/jpmoo/taleshed/.env
 
-ExecStart=/usr/bin/node -r dotenv/config dist/http.js
+ExecStart=/usr/bin/node dist/http.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -47,9 +47,9 @@ WantedBy=multi-user.target
 ```
 
 - **User/Group:** Run as your user so the process can read your repo and write `taleshed.db` and logs.
-- **WorkingDirectory:** Must be the TaleShed project root (where `dist/` and `.env` live).
-- **EnvironmentFile:** Optional. If `.env` exists, variables like `TALESHED_PORT` are loaded. The `-` means “ignore if missing.”
-- **ExecStart:** If `node` is elsewhere (e.g. nvm), use the full path from `which node`.
+- **WorkingDirectory:** Must be the TaleShed project root (where `dist/` and `.env` live). Used for relative paths (e.g. default DB); the app also loads `.env` from the project root next to `dist/` so variables apply even if cwd were wrong.
+- **EnvironmentFile:** Optional. If `.env` exists, systemd injects variables into the process (same keys as in `.env`). The `-` means “ignore if missing.” Use `KEY=value` lines only—do not use `export KEY=value` (systemd ignores `export`).
+- **ExecStart:** The binary loads `.env` from the install directory; `-r dotenv/config` is not required. If `node` is elsewhere (e.g. nvm), use the full path from `which node`.
 
 Save and exit.
 
@@ -72,6 +72,8 @@ journalctl -u taleshed.service -f
 ```
 
 Log file path (from the app) is printed at startup, e.g. `Request/error log: /home/jpmoo/taleshed/taleshed-errors.log`.
+
+If `TALESHED_DEBUG=1` but Ollama prompts do not appear in that file: confirm the unit has **`WorkingDirectory`** and optional **`EnvironmentFile`** pointing at the real project path, rebuild (`npm run build`), restart the service, and check **`journalctl`** for the line `DEBUG=1: logging Claude…` (if that line is missing, debug is off). If the project directory is not writable, the app may fall back to **`/tmp/taleshed-errors.log`**—check stderr in the journal for the actual path.
 
 ## 4. Useful commands
 
@@ -157,7 +159,7 @@ User=jpmoo
 Group=jpmoo
 WorkingDirectory=/home/jpmoo/taleshed
 EnvironmentFile=-/home/jpmoo/taleshed/.env
-ExecStart=/usr/bin/node -r dotenv/config dist/authoring-server.js
+ExecStart=/usr/bin/node dist/authoring-server.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

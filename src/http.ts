@@ -5,7 +5,7 @@
  * Claude and other remote clients connect via URL, e.g. http://localhost:3000/mcp
  */
 
-import "dotenv/config";
+import "./load-env.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
