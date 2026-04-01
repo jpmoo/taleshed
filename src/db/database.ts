@@ -258,3 +258,25 @@ export function writeRestoreEvent(db: Database.Database): void {
     "INSERT INTO history_ledger (timestamp, action_description, node_id, prose_impact, adjectives_old, adjectives_new, system_event) VALUES (?, 'RESTORE', 'SYSTEM', NULL, NULL, NULL, 'RESTORE')"
   ).run(now);
 }
+
+/** Returns true if a node with the given node_id exists (active or inactive). */
+export function nodeIdExists(db: Database.Database, nodeId: string): boolean {
+  return db.prepare("SELECT 1 FROM world_graph WHERE node_id = ?").get(nodeId) != null;
+}
+
+/** Insert a new world_graph node. Caller is responsible for uniqueness of node_id. */
+export function createWorldGraphNode(
+  db: Database.Database,
+  nodeId: string,
+  nodeType: string,
+  name: string,
+  baseDescription: string,
+  adjectivesJson: string,
+  locationId: string | null
+): void {
+  db.prepare(
+    `INSERT INTO world_graph
+       (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits)
+     VALUES (?, ?, ?, ?, ?, ?, 1, NULL, '[]')`
+  ).run(nodeId, nodeType, name, baseDescription, adjectivesJson, locationId);
+}

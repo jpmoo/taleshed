@@ -13,6 +13,12 @@ import {
   handleRestoreToBookmark,
   handleUpdateNodeAdjectives,
   handleVersion,
+  handleGetScene,
+  handleSetNodeAdjectives,
+  handleMoveEntity,
+  handleSealPassage,
+  handleEvaluateConsequences,
+  handleCreateNode,
 } from "./tools.js";
 
 const MAX_SUGGESTED_HISTORY_CHARS = 2800;
@@ -77,7 +83,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Take Turn",
       description:
-        "The core game loop. Pass the player's command exactly as the player typed it. You may send compound commands as one phrase (e.g. 'take the torch and go through the door') or as separate take_turn calls (e.g. 'take torch', then 'go through door', then 'east'); the engine handles both. When available, pass recent_history (or suggested_recent_history from the previous response). Returns result, prose, suggested_recent_history, and scene_node_ids (exact entity IDs for this scene—use these for update_node_adjectives, e.g. torch_01, ciaran). When presenting the engine's prose to the player: be verbose.",
+        "DEPRECATED — do not call this tool for new turns. Use the new turn sequence instead: get_scene → narrate → set_node_adjectives / move_entity → evaluate_consequences (optional). take_turn remains available only for legacy fallback; prefer the new tools for all gameplay.",
       inputSchema: TakeTurnSchema,
     },
     async (args: unknown) => {
@@ -198,7 +204,7 @@ export function createTaleshedServer(db: Database.Database): McpServer {
     {
       title: "Update Node Adjectives",
       description:
-        "When your narration implies a state or disposition change for an NPC or entity (e.g. Ciaran becomes less guarded, torch extinguished), call this to sync the engine so future turns see the updated state. Use the exact node_id from the last take_turn response's scene_node_ids (e.g. torch_01, ciaran, player)—not display names like 'torch'. Pass the full list of adjectives that now describe that entity. New adjectives get definitions automatically.",
+        "DEPRECATED — use set_node_adjectives instead. set_node_adjectives is a direct replacement with the same semantics but with dark-location protection, proper history ledgering, and vocabulary integration built in. Do not call update_node_adjectives for new turns.",
       inputSchema: UpdateNodeAdjectivesSchema,
     },
     async (args: unknown) => {
@@ -214,6 +220,243 @@ export function createTaleshedServer(db: Database.Database): McpServer {
         };
       }
       const out = await handleUpdateNodeAdjectives(db, parsed.data);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "set_node_adjectives",
+    {
+      title: "Set Node Adjectives",
+      description: `Replaces the complete adjective list for any node. Call this after every adjective change your narrative creates — the new list becomes the authoritative state for that node.
+
+Pass the full intended list, not a delta. Omitting an adjective removes it; including a new one adds it.
+
+Use node_ids exactly as returned by get_scene (entities[], inventory[], or "player").
+
+VOCABULARY: Every adjective you set should appear in get_scene's vocabulary[] or be a term you are introducing via evaluate_consequences. Follow each adjective's rule_description — the rules are authoritative.
+
+PROTECTION: "dark" on location nodes is authoring-only. The server silently preserves or omits it regardless of what you pass — never attempt to add or remove "dark" from a location.
+
+NEGATION: To remove a state, omit the adjective — do not add negation terms (e.g. pass [] to clear "locked", not ["unlocked"]).`,
+      inputSchema: z.object({
+        node_id: z.string().describe("Exact node_id of the entity to update (e.g. door_01, ciaran, torch_01, player)."),
+        adjectives: z.array(z.string()).describe("Complete new adjective list for this node. Replaces the previous list entirely."),
+      }),
+    },
+    async (args: unknown) => {
+      const schema = z.object({ node_id: z.string(), adjectives: z.array(z.string()) });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: parsed.error.message }) }] };
+      }
+      const out = handleSetNodeAdjectives(db, parsed.data);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "move_entity",
+    {
+      title: "Move Entity",
+      description: `Moves any non-location entity to a new parent node. Handles all transfers:
+
+- Player moves between locations: entity_id "player", destination = location node_id
+- Taking an object: entity_id = object node_id, destination = "player"
+- Dropping an object: entity_id = object node_id, destination = current location node_id
+- Putting in a container: entity_id = object node_id, destination = container node_id
+- Giving to an NPC: entity_id = object node_id, destination = NPC node_id
+
+Both entity_id and destination_id must be valid node_ids in the world_graph. The player may only be moved to location nodes. Locations themselves cannot be moved.
+
+When moving the player, the server automatically records the previous location so dark-room entrance tracking works correctly.`,
+      inputSchema: z.object({
+        entity_id: z.string().describe("node_id of the entity to move. Must not be a location. Use 'player' to move the player."),
+        destination_id: z.string().describe("node_id of the destination — a location, container object, NPC, or 'player' for inventory. Must exist in the world_graph."),
+      }),
+    },
+    async (args: unknown) => {
+      const schema = z.object({ entity_id: z.string(), destination_id: z.string() });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: parsed.error.message }) }] };
+      }
+      const out = handleMoveEntity(db, parsed.data);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "seal_passage",
+    {
+      title: "Seal Passage",
+      description: `Permanently removes an exit from a location's topology. Use only when a passage is physically and irreversibly destroyed — a tunnel collapse, a wall bricked over, a doorway sealed with stone.
+
+This is permanent within the current game session. It cannot be undone except by restoring a bookmark.
+
+To block a passage temporarily (locked door, portcullis, jammed gate), use set_node_adjectives on the door object instead — the exit stays in the topology, only the door's state changes.
+
+exit_target is the node_id of the destination the exit connects to (e.g. "kitchen"). Use the target values from get_scene's location.exits[].`,
+      inputSchema: z.object({
+        location_id: z.string().describe("node_id of the location whose exit should be removed."),
+        exit_target: z.string().describe("node_id of the destination the exit connects to. Must match a target in that location's exits list."),
+      }),
+    },
+    async (args: unknown) => {
+      const schema = z.object({ location_id: z.string(), exit_target: z.string() });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: parsed.error.message }) }] };
+      }
+      const out = handleSealPassage(db, parsed.data);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "evaluate_consequences",
+    {
+      title: "Evaluate Consequences",
+      description: `Call this after committing primary state changes (set_node_adjectives, move_entity) to ask Mistral whether anything else in the scene should change as a result, and to define any new vocabulary terms.
+
+Mistral receives a short focused prompt — the action description, the current scene state, and the existing vocabulary. It returns cascade adjective changes for other entities and definitions for new terms. Both are automatically applied and ledgered before this tool returns.
+
+WHEN TO CALL:
+- After lighting or extinguishing a light source (other entities may react)
+- After significant NPC interactions where mood or disposition might ripple
+- After environmental changes that could affect other entities (door broken, passage sealed)
+- When introducing a new adjective term that needs a vocabulary definition
+- You do NOT need to call this for simple movement, taking, or dropping unless there is a clear reason something else would change
+
+action_description: a plain English summary of what just happened and what primary changes were committed. Be specific — this is the only context Mistral has.
+affected_node_ids: optional list of node_ids that were directly changed. Helps Mistral focus on what to cascade from.
+proposed_adjectives: optional new adjective terms you want defined and added to vocabulary. Mistral writes the rule; the server inserts it.
+
+The primary action is already committed before this is called. If Mistral is unavailable, this returns empty results and the turn continues normally.`,
+      inputSchema: z.object({
+        action_description: z
+          .string()
+          .describe("Plain English summary of what just happened and what primary state changes were committed. E.g. 'Player lit the torch. torch_01 adjectives set to [lit]. The scriptorium is now illuminated.'"),
+        affected_node_ids: z
+          .array(z.string())
+          .optional()
+          .describe("node_ids that were directly changed this turn (e.g. ['torch_01', 'scriptorium']). Helps Mistral focus cascade reasoning."),
+        proposed_adjectives: z
+          .array(z.string())
+          .optional()
+          .describe("New adjective terms to define and add to vocabulary (e.g. ['grateful', 'illuminated']). Mistral writes a one-sentence rule for each; the server inserts them."),
+      }),
+    },
+    async (args: unknown) => {
+      const schema = z.object({
+        action_description: z.string(),
+        affected_node_ids: z.array(z.string()).optional(),
+        proposed_adjectives: z.array(z.string()).optional(),
+      });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ cascade_changes_applied: [], vocabulary_added: [], error: parsed.error.message }) }],
+        };
+      }
+      const out = await handleEvaluateConsequences(db, parsed.data);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "get_scene",
+    {
+      title: "Get Scene",
+      description: `Returns the complete authoritative world state for the current player location. Call this at the start of every player turn before narrating or deciding anything.
+
+TURN SEQUENCE — follow this order every turn:
+1. Call get_scene. Read everything it returns before you write a single word of narration.
+2. Narrate the result of the player's action, grounded entirely in what get_scene returned.
+3. Commit all changes: call set_node_adjectives for every adjective change, move_entity for every movement or object transfer. The rule is absolute — if your narrative created or changed something, it must be written back before the turn ends.
+4. Optionally call evaluate_consequences if the action could ripple outward (a torch lit, a door broken, an NPC's mood shifted). Skip it for simple movement or object transfers with no side effects.
+
+RESPONSE FIELDS:
+- location: where the player is, with adjectives and exits
+- entities[]: every NPC and object present — EXHAUSTIVE. What is not listed does not exist this turn.
+- player: current adjectives and location
+- inventory[]: what the player is carrying, with adjectives
+- vocabulary[]: every adjective in the world and its rule — these rules are authoritative
+- recent_history[]: last few player commands
+- darkness_active: true when the location has the authored "dark" adjective AND no lit object is present in the room or inventory. "dark" is set only in the authoring tool — it means this location has no ambient light and cannot be described without a light source. Never add or remove "dark" from a location via set_node_adjectives. When darkness_active is true, narrate only impenetrable darkness and the exit the player came from; nothing else is visible.
+
+GROUND RULES:
+- Entity list is exhaustive: do not invent people, objects, or exits not in entities[].
+- Adjectives are the governing language of world state. Read them to know what is true; write them back to make changes permanent.
+- Vocabulary rules are authoritative: when an adjective applies to a node, follow what its rule_description says.
+- Creative liberties are welcome when narratively plausible and grounded in world state. A locked door may yield to termite-infested wood; a key cannot appear from nowhere.
+- Whatever your narrative creates or changes must be committed. Narrating a change without writing it back is a contract violation.`,
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const out = handleGetScene(db);
+      return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
+    }
+  );
+
+  server.registerTool(
+    "create_node",
+    {
+      title: "Create Node",
+      description: `Creates a new object or NPC node in the world graph and immediately places it in the scene. Use this when your narrative genuinely introduces a new entity — an apple that falls from a cloister tree, a rat that scurries from a broken wall, a note a monk produces from his robe.
+
+Do NOT create nodes for things already in get_scene's entities[] or inventory[]. The entity must be narratively motivated: if you didn't just describe it appearing or being produced, it shouldn't be created.
+
+After creation the node exists immediately. Call set_node_adjectives to set its state or move_entity to transfer it (e.g. into the player's inventory). It will appear in the next get_scene call.
+
+node_type: "object" or "npc" only — locations are authored, not created mid-game.
+name: display name (e.g. "Bruised Apple", "Frightened Rat").
+base_description: one sentence used when describing the entity (e.g. "A small green apple, bruised from the fall.").
+adjectives: initial adjectives — follow vocabulary rules. Never pass "dark".
+location_id: where to place it. Defaults to the player's current location if omitted.
+node_id: preferred node_id (e.g. "apple_01"). Server appends a suffix if it conflicts.`,
+      inputSchema: z.object({
+        node_type: z
+          .enum(["object", "npc"])
+          .describe('"object" or "npc". Locations cannot be created mid-game.'),
+        name: z
+          .string()
+          .min(1)
+          .describe('Display name for the new entity (e.g. "Bruised Apple", "Frightened Rat").'),
+        base_description: z
+          .string()
+          .min(1)
+          .describe("A short descriptive sentence for this entity, used when the scene describes it."),
+        adjectives: z
+          .array(z.string())
+          .optional()
+          .describe("Initial adjectives for the new node. Follow vocabulary rules."),
+        location_id: z
+          .string()
+          .optional()
+          .describe("node_id of where to place the entity. Defaults to the player's current location."),
+        node_id: z
+          .string()
+          .optional()
+          .describe('Preferred node_id (e.g. "apple_01"). A suffix is added automatically if it conflicts.'),
+      }),
+    },
+    async (args: unknown) => {
+      const schema = z.object({
+        node_type: z.enum(["object", "npc"]),
+        name: z.string().min(1),
+        base_description: z.string().min(1),
+        adjectives: z.array(z.string()).optional(),
+        location_id: z.string().optional(),
+        node_id: z.string().optional(),
+      });
+      const parsed = schema.safeParse(args);
+      if (!parsed.success) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: parsed.error.message }) }],
+        };
+      }
+      const out = handleCreateNode(db, parsed.data);
       return { content: [{ type: "text" as const, text: JSON.stringify(out) }] };
     }
   );
