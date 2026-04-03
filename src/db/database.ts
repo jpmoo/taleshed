@@ -77,21 +77,39 @@ export function getRootLocationId(db: Database.Database, nodeId: string): string
   return null;
 }
 
-/** Entities in a location, plus entities contained in objects in that location (one level). Contents are only included if the container is not closed. Order: each direct entity then its contents. */
-export function getEntitiesInLocationIncludingContents(db: Database.Database, locationId: string): WorldNode[] {
-  const direct = getEntitiesInLocation(db, locationId);
+/**
+ * Recursively collect all visible children of a parent node.
+ * - Items with the "hidden" adjective are silently skipped.
+ * - Objects with the "closed" adjective are not recursed into.
+ * - NPCs are always recursed into (they carry things, never "closed").
+ * depth guard prevents infinite loops from bad data.
+ */
+function getVisibleContentsRecursive(db: Database.Database, parentId: string, depth: number): WorldNode[] {
+  if (depth > 6) return [];
+  const children = getEntitiesInLocation(db, parentId);
   const result: WorldNode[] = [];
-  for (const node of direct) {
-    result.push(node);
-    if (node.node_type === "object") {
-      const adjectives = parseAdjectives(node.adjectives);
-      if (!adjectives.includes("closed")) {
-        const contents = getEntitiesInLocation(db, node.node_id);
-        for (const c of contents) result.push(c);
+  for (const child of children) {
+    const adjectives = parseAdjectives(child.adjectives);
+    if (adjectives.some((a) => a.toLowerCase() === "hidden")) continue;
+    result.push(child);
+    if (child.node_type === "object" || child.node_type === "npc") {
+      const isClosed = child.node_type === "object" && adjectives.some((a) => a.toLowerCase() === "closed");
+      if (!isClosed) {
+        result.push(...getVisibleContentsRecursive(db, child.node_id, depth + 1));
       }
     }
   }
   return result;
+}
+
+/**
+ * Entities in a location plus all visible contents, recursively.
+ * Skips items with "hidden" adjective.
+ * Does not recurse into objects with "closed" adjective.
+ * NPCs are recursed into — their visible carried items appear in the scene.
+ */
+export function getEntitiesInLocationIncludingContents(db: Database.Database, locationId: string): WorldNode[] {
+  return getVisibleContentsRecursive(db, locationId, 0);
 }
 
 function parseAdjectives(adjectivesJson: string): string[] {

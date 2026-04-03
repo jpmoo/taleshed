@@ -404,15 +404,9 @@ export function handleGetScene(db: Database.Database): GetSceneOutput {
   const inLocationRaw = getEntitiesInLocationIncludingContents(db, locationId);
   const inLocationSameRoot = inLocationRaw.filter((n) => getRootLocationId(db, n.node_id) === locationId);
 
-  // Exclude items whose immediate parent is the player or an NPC (those are carried, not in the room).
-  const npcIdsInRoom = new Set(
-    inLocationSameRoot.filter((n) => n.node_type === "npc").map((n) => n.node_id)
-  );
-  const inLocation = inLocationSameRoot.filter((n) => {
-    if (n.location_id === player.node_id) return false;
-    if (n.location_id != null && npcIdsInRoom.has(n.location_id)) return false;
-    return true;
-  });
+  // Exclude items directly carried by the player — those appear in inventory[] separately.
+  // NPC-carried visible items are intentionally included (hidden adjective suppresses them at the db layer).
+  const inLocation = inLocationSameRoot.filter((n) => n.location_id !== player.node_id);
 
   const inventory = getPlayerInventory(db);
 
