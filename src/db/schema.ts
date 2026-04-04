@@ -77,6 +77,14 @@ export function initDatabase(dbPath?: string): Database.Database {
     }
   }
 
+  // Migration: add combat power columns
+  for (const col of ["base_power", "attack_power", "defense_power"]) {
+    const has = db.prepare("SELECT 1 FROM pragma_table_info('world_graph') WHERE name = ?").get(col);
+    if (!has) {
+      db.exec(`ALTER TABLE world_graph ADD COLUMN ${col} REAL`);
+    }
+  }
+
   return db;
 }
 
@@ -97,6 +105,12 @@ export interface WorldNode {
   grid_x?: number | null;
   grid_y?: number | null;
   grid_z?: number | null;
+  /** Combat: base vitality/health for players and NPCs. Reaches 0 = dead. */
+  base_power?: number | null;
+  /** Combat: offensive modifier for objects (weapons, improvised weapons). Added to wielder's base_power for attack. */
+  attack_power?: number | null;
+  /** Combat: defensive modifier for objects (shields, armour, improvised shields). Added to wielder's base_power for defence. */
+  defense_power?: number | null;
 }
 
 export interface HistoryEntry {

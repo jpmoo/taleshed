@@ -1315,6 +1315,9 @@
     document.getElementById("edit-grid_x").value = "";
     document.getElementById("edit-grid_y").value = "";
     document.getElementById("edit-grid_z").value = "";
+    document.getElementById("edit-base_power").value = "";
+    document.getElementById("edit-attack_power").value = "";
+    document.getElementById("edit-defense_power").value = "";
     document.getElementById("edit-exits").value = "[]";
     document.getElementById("edit-node_type").value = "location";
     document.getElementById("exits-section").classList.remove("hidden");
@@ -1379,6 +1382,9 @@
     document.getElementById("edit-grid_x").value = node.grid_x != null ? String(Math.round(Number(node.grid_x))) : "";
     document.getElementById("edit-grid_y").value = node.grid_y != null ? String(Math.round(Number(node.grid_y))) : "";
     document.getElementById("edit-grid_z").value = node.grid_z != null ? String(Math.round(Number(node.grid_z))) : "";
+    document.getElementById("edit-base_power").value = node.base_power != null ? String(node.base_power) : "";
+    document.getElementById("edit-attack_power").value = node.attack_power != null ? String(node.attack_power) : "";
+    document.getElementById("edit-defense_power").value = node.defense_power != null ? String(node.defense_power) : "";
     if (node.node_type === "location") {
       document.getElementById("exits-section").classList.remove("hidden");
       renderExitsList(node.exits, node.node_id);
@@ -1496,6 +1502,24 @@
         if (v === "") return null;
         const n = parseFloat(v);
         return isNaN(n) ? null : Math.round(n);
+      })(),
+      base_power: (function () {
+        const v = document.getElementById("edit-base_power").value;
+        if (v === "") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      })(),
+      attack_power: (function () {
+        const v = document.getElementById("edit-attack_power").value;
+        if (v === "") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      })(),
+      defense_power: (function () {
+        const v = document.getElementById("edit-defense_power").value;
+        if (v === "") return null;
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
       })(),
       exits: exitsJson,
     };

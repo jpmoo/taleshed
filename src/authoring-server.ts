@@ -186,6 +186,9 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     const grid_x = body.grid_x != null ? Number(body.grid_x) : null;
     const grid_y = body.grid_y != null ? Number(body.grid_y) : null;
     const grid_z = body.grid_z != null ? Number(body.grid_z) : null;
+    const base_power = body.base_power != null && body.base_power !== "" ? Number(body.base_power) : null;
+    const attack_power = body.attack_power != null && body.attack_power !== "" ? Number(body.attack_power) : null;
+    const defense_power = body.defense_power != null && body.defense_power !== "" ? Number(body.defense_power) : null;
 
     if (node_type === "location") {
       const oldExits = parseExitsJson(existingRow.exits);
@@ -210,8 +213,8 @@ app.put("/api/world-graph/:node_id", (req: Request, res: Response) => {
     }
 
     db.prepare(
-      `UPDATE world_graph SET node_type = ?, name = ?, base_description = ?, adjectives = ?, location_id = ?, is_active = ?, meta = ?, exits = ?, grid_x = ?, grid_y = ?, grid_z = ? WHERE node_id = ?`
-    ).run(node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z, nodeId);
+      `UPDATE world_graph SET node_type = ?, name = ?, base_description = ?, adjectives = ?, location_id = ?, is_active = ?, meta = ?, exits = ?, grid_x = ?, grid_y = ?, grid_z = ?, base_power = ?, attack_power = ?, defense_power = ? WHERE node_id = ?`
+    ).run(node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z, base_power, attack_power, defense_power, nodeId);
     const row = db.prepare("SELECT * FROM world_graph WHERE node_id = ?").get(nodeId) as WorldNode;
     res.json(row);
   } catch (e) {
@@ -248,11 +251,14 @@ app.post("/api/world-graph", (req: Request, res: Response) => {
     const grid_x = body.grid_x != null ? Number(body.grid_x) : null;
     const grid_y = body.grid_y != null ? Number(body.grid_y) : null;
     const grid_z = body.grid_z != null ? Number(body.grid_z) : null;
+    const base_power = body.base_power != null && body.base_power !== "" ? Number(body.base_power) : null;
+    const attack_power = body.attack_power != null && body.attack_power !== "" ? Number(body.attack_power) : null;
+    const defense_power = body.defense_power != null && body.defense_power !== "" ? Number(body.defense_power) : null;
 
     db.prepare(
-      `INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z);
+      `INSERT INTO world_graph (node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z, base_power, attack_power, defense_power)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(node_id, node_type, name, base_description, adjectives, location_id, is_active, meta, exits, grid_x, grid_y, grid_z, base_power, attack_power, defense_power);
     if (node_type === "location") {
       const newExits = parseExitsJson(exits);
       for (const e of newExits) {
