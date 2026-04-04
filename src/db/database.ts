@@ -89,10 +89,9 @@ function getVisibleContentsRecursive(db: Database.Database, parentId: string, de
   const children = getEntitiesInLocation(db, parentId);
   const result: WorldNode[] = [];
   for (const child of children) {
-    const adjectives = parseAdjectives(child.adjectives);
-    if (adjectives.some((a) => a.toLowerCase() === "hidden")) continue;
     result.push(child);
     if (child.node_type === "object" || child.node_type === "npc") {
+      const adjectives = parseAdjectives(child.adjectives);
       const isClosed = child.node_type === "object" && adjectives.some((a) => a.toLowerCase() === "closed");
       if (!isClosed) {
         result.push(...getVisibleContentsRecursive(db, child.node_id, depth + 1));
